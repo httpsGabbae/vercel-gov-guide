@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { CivicMarkdown } from './CivicMarkdown';
+import { SpeechSynthesisButton } from '@/components/voice/SpeechSynthesisButton';
 
 interface AgentResponseViewProps {
   text: string;
@@ -36,8 +37,8 @@ export function AgentResponseView({
         <CivicMarkdown content={text} onOpenSource={onOpenSource} />
       </div>
 
-      {/* Copy Action repositioned cleanly at bottom of text */}
-      <div className="mt-2.5 flex items-center justify-start">
+      {/* Copy and Listen Actions cleanly at bottom of text */}
+      <div className="mt-2.5 flex items-center justify-start gap-1.5">
         <button
           type="button"
           onClick={handleCopy}
@@ -56,6 +57,8 @@ export function AgentResponseView({
             </>
           )}
         </button>
+
+        <SpeechSynthesisButton text={text} />
       </div>
 
       {/* Embedded Action/Inspection/Checklist Cards */}

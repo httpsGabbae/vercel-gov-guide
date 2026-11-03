@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { getRoleRedirectPath } from '@/lib/auth/roles';
+import { TermsModal } from './TermsModal';
+import { ConsentModal } from './ConsentModal';
 
 interface AuthCardProps {
   initialMode?: 'login' | 'register';
@@ -18,9 +20,26 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAttempted, setTermsAttempted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Sync state if terms are accepted via the popup modal
+  useEffect(() => {
+    const onAccepted = () => {
+      setTermsAccepted(true);
+      setTermsAttempted(false);
+      setErrorMsg(null);
+    };
+    window.addEventListener('govguide:terms-accepted', onAccepted);
+    return () => {
+      window.removeEventListener('govguide:terms-accepted', onAccepted);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +67,13 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
       }
     }
 
+    // Must agree to terms before signing in / registering
+    if (!termsAccepted) {
+      setTermsAttempted(true);
+      setErrorMsg('Please check "I have read and agree to the Terms and Conditions and Consent Form" to continue.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -64,23 +90,65 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
         }
 
         if (data.user) {
+          // Record consent immediately to Supabase and cache
+          try {
+            await fetch('/api/citizen/consent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: data.user.id,
+                termsAccepted: true,
+                version: '2026.11-v1',
+              }),
+            });
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(
+                `govguide_consent_${data.user.id}`,
+                JSON.stringify({
+                  accepted: true,
+                  at: new Date().toISOString(),
+                  version: '2026.11-v1',
+                })
+              );
+            }
+          } catch {
+            // Non-fatal
+          }
+
           // Check role to direct to correct dashboard or chat
-          const isGovEmail = cleanEmail.endsWith('.gov.ph') || cleanEmail.includes('@psa.') || cleanEmail.includes('@dfa.') || cleanEmail.includes('@dpwh.');
+          const isGovEmail =
+            cleanEmail.endsWith('.gov.ph') ||
+            cleanEmail.includes('@psa.') ||
+            cleanEmail.includes('@dfa.') ||
+            cleanEmail.includes('@dpwh.');
           const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
             .maybeSingle();
 
-          const targetRole = profile?.role === 'agency_admin' || isGovEmail ? 'agency_admin' : (profile?.role || 'citizen');
+          const targetRole =
+            profile?.role === 'agency_admin' || isGovEmail
+              ? 'agency_admin'
+              : profile?.role || 'citizen';
           const redirectPath = getRoleRedirectPath(targetRole);
           router.push(redirectPath === '/citizen/chat' ? '/chat' : redirectPath);
           router.refresh();
         }
       } else {
         // Register mode: auto-detect agency role if signing up with official government domain
-        const isGovEmail = cleanEmail.endsWith('.gov.ph') || cleanEmail.includes('psa') || cleanEmail.includes('dfa') || cleanEmail.includes('dpwh');
-        const agencyCode = cleanEmail.includes('psa') ? 'PSA' : cleanEmail.includes('dfa') ? 'DFA' : cleanEmail.includes('dpwh') ? 'DPWH' : 'PSA';
+        const isGovEmail =
+          cleanEmail.endsWith('.gov.ph') ||
+          cleanEmail.includes('psa') ||
+          cleanEmail.includes('dfa') ||
+          cleanEmail.includes('dpwh');
+        const agencyCode = cleanEmail.includes('psa')
+          ? 'PSA'
+          : cleanEmail.includes('dfa')
+          ? 'DFA'
+          : cleanEmail.includes('dpwh')
+          ? 'DPWH'
+          : 'PSA';
         const detectedRole = isGovEmail ? 'agency_admin' : 'citizen';
 
         const { data, error } = await supabase.auth.signUp({
@@ -91,6 +159,8 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
               full_name: fullName.trim(),
               role: detectedRole,
               agency_code: isGovEmail ? agencyCode : undefined,
+              terms_accepted: true,
+              terms_accepted_at: new Date().toISOString(),
             },
           },
         });
@@ -103,6 +173,30 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
 
         if (data.session) {
           // Instant sign-in (email confirmation off in Supabase)
+          try {
+            await fetch('/api/citizen/consent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: data.session.user.id,
+                termsAccepted: true,
+                version: '2026.11-v1',
+              }),
+            });
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(
+                `govguide_consent_${data.session.user.id}`,
+                JSON.stringify({
+                  accepted: true,
+                  at: new Date().toISOString(),
+                  version: '2026.11-v1',
+                })
+              );
+            }
+          } catch {
+            // Non-fatal
+          }
+
           const redirectPath = detectedRole === 'agency_admin' ? '/agency/dashboard' : '/chat';
           router.push(redirectPath);
           router.refresh();
@@ -147,7 +241,7 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
               setMode('login');
               setErrorMsg(null);
             }}
-            className={`rounded-lg py-1.5 text-xs font-semibold transition-all ${
+            className={`rounded-lg py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               mode === 'login'
                 ? 'bg-white text-slate-900 shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -161,7 +255,7 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
               setMode('register');
               setErrorMsg(null);
             }}
-            className={`rounded-lg py-1.5 text-xs font-semibold transition-all ${
+            className={`rounded-lg py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               mode === 'register'
                 ? 'bg-white text-slate-900 shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -253,7 +347,7 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -308,10 +402,17 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
             </div>
           )}
 
+          {/* Login / Register Submit Button */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-slate-900 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 active:scale-98 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            disabled={loading || !termsAccepted}
+            aria-disabled={loading || !termsAccepted}
+            title={!termsAccepted ? 'Please check the Terms & Conditions and Consent Form to continue' : undefined}
+            className={`w-full rounded-lg py-2.5 text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-xs ${
+              loading || !termsAccepted
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none'
+                : 'bg-slate-900 text-white hover:bg-slate-800 active:scale-98 cursor-pointer'
+            }`}
           >
             {loading && (
               <svg
@@ -336,6 +437,65 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
             )}
             <span>{mode === 'login' ? 'Sign In' : 'Create Account'}</span>
           </button>
+
+          {/* Terms & Conditions / Data Privacy Checkbox placed directly under the Login Button */}
+          <div
+            className={`pt-1.5 transition-all rounded-lg ${
+              termsAttempted && !termsAccepted
+                ? 'bg-amber-50/70 p-2 border border-amber-300'
+                : ''
+            }`}
+          >
+            <label className="flex items-start gap-2.5 cursor-pointer select-none group">
+              <input
+                id="login-terms-checkbox"
+                name="termsAccepted"
+                type="checkbox"
+                required
+                checked={termsAccepted}
+                onChange={(e) => {
+                  setTermsAccepted(e.target.checked);
+                  setTermsAttempted(false);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-slate-900 focus:ring-slate-900 accent-slate-900 cursor-pointer"
+              />
+              <span className="text-[11px] sm:text-xs text-slate-600 leading-normal group-hover:text-slate-900 transition-colors">
+                I have read and agree to the{' '}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowTermsModal(true);
+                  }}
+                  className="font-semibold text-slate-900 hover:text-blue-600 underline underline-offset-2 transition-colors inline cursor-pointer"
+                >
+                  Terms and Conditions
+                </button>{' '}
+                and{' '}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowConsentModal(true);
+                  }}
+                  className="font-semibold text-slate-900 hover:text-blue-600 underline underline-offset-2 transition-colors inline cursor-pointer"
+                >
+                  Consent Form
+                </button>
+                .
+              </span>
+            </label>
+            {!termsAccepted && (
+              <p className="mt-1 pl-6 text-[11px] text-slate-400">
+                You must check this box to enable {mode === 'login' ? 'Sign In' : 'registration'}.
+              </p>
+            )}
+          </div>
+
+          {/* Separate Simple Modals (No Checkboxes inside) */}
+          <TermsModal open={showTermsModal} onClose={() => setShowTermsModal(false)} />
+          <ConsentModal open={showConsentModal} onClose={() => setShowConsentModal(false)} />
         </form>
 
         {/* Bottom Navigation */}

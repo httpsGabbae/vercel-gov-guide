@@ -33,6 +33,7 @@ import {
   evaluateOnlineReadiness,
   type OnlineApplicationData,
 } from '@/lib/services/online-services';
+import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 import { RemediationBranchDrawer, type RemediationBranchData } from '@/components/chat/RemediationBranchDrawer';
 import { GmailNotificationsView } from '@/components/chat/GmailNotificationsView';
 import { OfficialPsaBirthCertForm } from '@/components/forms/OfficialPsaBirthCertForm';
@@ -4567,6 +4568,8 @@ export default function CitizenChatPage() {
   ).length;
   const isMyDetailsActive = view === 'details' || view === 'referrals' || view === 'tasks';
   const lastMsg = messages.at(-1);
+  const isGuest = !authUser;
+
   const nextActions =
     !busy && lastMsg?.from === 'agent' && lastMsg.phase === 'done'
       ? (lastMsg.reply?.next ?? [])
@@ -4574,9 +4577,14 @@ export default function CitizenChatPage() {
 
   return (
     <AppContext.Provider value={ctxValue}>
-      <div className="shell h-dvh bg-white" data-collapsed={sidebarCollapsed}>
-        {/* Left Sidebar (Standard structure & classes) */}
-        <aside
+      <div
+        className="shell h-dvh bg-white"
+        data-collapsed={isGuest ? 'true' : sidebarCollapsed}
+        style={isGuest ? { gridTemplateColumns: '1fr' } : undefined}
+      >
+        {/* Left Sidebar (Only for authenticated users; removed on guest mode) */}
+        {!isGuest && (
+          <aside
           className="sidebar bg-[var(--sidebar)]"
           data-mobile-open={mobileMenuOpen}
           aria-label="Sidebar"
@@ -4887,19 +4895,54 @@ export default function CitizenChatPage() {
             </div>
           </div>
         </aside>
+        )}
 
         {/* Mobile Backdrop */}
+        {!isGuest && (
         <div
           className="mobile-backdrop"
           data-open={mobileMenuOpen}
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
+        )}
 
         {/* Main Content Area */}
         <main className="relative flex min-w-0 flex-col overflow-hidden">
-          {/* Floating Sidebar Toggle Button for Collapsed State or Mobile */}
-          {(sidebarCollapsed || !mobileMenuOpen) && (
+          {/* Guest Mode Header */}
+          {isGuest && (
+            <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--hairline)] px-4 bg-white select-none z-20">
+              <div className="flex items-center gap-2.5">
+                <LogoMark size={26} priority />
+                <span className="text-[14px] font-semibold tracking-tight text-slate-900">GovGuide PH</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200/60">
+                  Guest Mode · Temporary Chat
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveThreadId(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                  title="Start a fresh temporary chat"
+                >
+                  {Icons.plus}
+                  <span>New chat</span>
+                </button>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-2xs"
+                >
+                  <span>Sign In</span>
+                </Link>
+              </div>
+            </header>
+          )}
+
+          {/* Floating Sidebar Toggle Button for Collapsed State or Mobile (Authenticated Only) */}
+          {!isGuest && (sidebarCollapsed || !mobileMenuOpen) && (
             <button
               type="button"
               onClick={() => {
@@ -4998,20 +5041,24 @@ export default function CitizenChatPage() {
                     </div>
 
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 max-w-xl">
-                      {applicant.role === 'agency_admin'
+                      {isGuest
+                        ? 'Kumusta! Paano kita matutulungan?'
+                        : applicant.role === 'agency_admin'
                         ? applicant.display_name
                         : !applicant.display_name
                         ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat.'
                         : `Kumusta, ${applicant.first_name || applicant.display_name.split(' ')[0]}!`}
                     </h1>
                     <p className="mt-2 text-[13px] text-slate-500 max-w-md">
-                      {applicant.role === 'agency_admin'
+                      {isGuest
+                        ? 'Mabilis at opisyal na gabay sa mga serbisyo at dokumento ng gobyerno. Magtanong o pumili sa ibaba.'
+                        : applicant.role === 'agency_admin'
                         ? 'Opisyal na Portal ng Ahensya · Subaybayan ang mga transaksyon, counter requirements, at Citizen’s Charter.'
                         : !applicant.display_name
                         ? 'Punan ang inyong impormasyon sa My Details bago makipag-chat.'
                         : 'Mabilis at opisyal na gabay sa mga serbisyo at dokumento ng gobyerno. Magtanong o pumili sa ibaba.'}
                     </p>
-                    {!applicant.display_name && (
+                    {!isGuest && !applicant.display_name && (
                       <div className="mt-4">
                         <button
                           type="button"
@@ -5300,7 +5347,7 @@ export default function CitizenChatPage() {
 
                 {/* Composer (`.composer` card - slim) */}
                 <div ref={composerWrapRef} className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-3">
-                  <div data-tour="composer" className="composer rounded-[16px] bg-white">
+                  <div data-tour="composer" className="composer relative rounded-[16px] bg-white">
                     {attachedFiles.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 px-3 pt-3">
                         {attachedFiles.map((f, idx) => (
@@ -5363,7 +5410,7 @@ export default function CitizenChatPage() {
                         }
                       }}
                       placeholder={
-                        !applicant.display_name || applicant.role === 'new_citizen'
+                        !isGuest && (!applicant.display_name || applicant.role === 'new_citizen')
                           ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat...'
                           : 'Magtanong tungkol sa serbisyo ng gobyerno o mag-upload ng ID para masuri...'
                       }
@@ -5528,6 +5575,23 @@ export default function CitizenChatPage() {
                           </div>
                         )}
                       </Popover>
+
+                                            {/* Hands-Free Voice Input Microphone Button with Automatic 2-Second Silence Submission */}
+                      <VoiceInputButton
+                        language={language}
+                        disabled={busy}
+                        initialText={inputText}
+                        onTranscript={(transcript) => {
+                          if (transcript.trim()) {
+                            setInputText(transcript);
+                          }
+                        }}
+                        onAutoSubmit={(finalMessage) => {
+                          if (finalMessage.trim() && !busy) {
+                            void sendTurn(finalMessage.trim());
+                          }
+                        }}
+                      />
 
                       {/* Send Button */}
                       <button

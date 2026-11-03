@@ -37,7 +37,7 @@ export interface GuardrailEvaluation {
     hint: string;
     action: 'message' | 'attach' | 'demo_file' | 'view';
     text?: string;
-    view?: 'chat' | 'referrals' | 'tasks' | 'log';
+    view?: 'chat' | 'referrals' | 'tasks' | 'details';
     file?: { path: string; name: string; type: string };
   }[];
 }
@@ -390,11 +390,11 @@ export function evaluateGuardrails(
       },
       suggestedNext: [
         {
-          id: 'view_log',
-          label: 'Open Audit & Privacy Log',
-          hint: 'Verify hash-chain integrity of all recorded actions',
+          id: 'view_details',
+          label: 'View Requirements & Details',
+          hint: 'Review your pre-flight requirements and checklist',
           action: 'view',
-          view: 'log',
+          view: 'details',
         },
         {
           id: 'legit_checklist',

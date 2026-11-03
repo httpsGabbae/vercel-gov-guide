@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CivicMarkdown } from './CivicMarkdown';
+import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 
 export interface BranchMessage {
   id: string;
@@ -559,7 +560,7 @@ export function RemediationBranchDrawer({
               e.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-2 pt-1"
+            className="relative flex items-center gap-1.5 pt-1"
           >
             <input
               type="text"
@@ -568,6 +569,21 @@ export function RemediationBranchDrawer({
               placeholder={`Magtanong ukol sa pag-ayos ng ${data.documentTitle}...`}
               className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none"
               disabled={isTyping}
+            />
+            <VoiceInputButton
+              size="sm"
+              disabled={isTyping}
+              initialText={inputText}
+              onTranscript={(transcript) => {
+                if (transcript.trim()) {
+                  setInputText(transcript);
+                }
+              }}
+              onAutoSubmit={(finalMessage) => {
+                if (finalMessage.trim() && !isTyping) {
+                  handleSendMessage(finalMessage.trim());
+                }
+              }}
             />
             <button
               type="submit"

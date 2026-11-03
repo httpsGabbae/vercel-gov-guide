@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { TermsConsentModal } from '@/components/auth/TermsConsentModal';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,7 +32,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full bg-white text-[#0a0a0a]">{children}</body>
+      <body className="min-h-full bg-white text-[#0a0a0a]">
+        {children}
+        <TermsConsentModal />
+      </body>
     </html>
   );
 }
