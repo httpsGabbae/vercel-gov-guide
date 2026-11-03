@@ -5,6 +5,7 @@ import {
   pinError,
   pinGate,
   privateHeaders,
+  pinServiceUnavailable,
 } from '@/lib/auth/details-pin';
 
 export async function GET(req: NextRequest) {
@@ -12,8 +13,8 @@ export async function GET(req: NextRequest) {
     const userId = await authenticatedDetailsUser(req);
     if (!userId) return pinError('Please sign in to secure My Details.', 401, 'SIGN_IN_REQUIRED');
     return NextResponse.json(await pinGate(userId, 'status'), { headers: privateHeaders });
-  } catch {
-    return pinError('PIN settings are unavailable. Please try again.', 503, 'UNAVAILABLE');
+  } catch (error) {
+    return pinServiceUnavailable(error);
   }
 }
 export async function POST(req: NextRequest) {
@@ -60,8 +61,8 @@ export async function POST(req: NextRequest) {
       { ok: true, token, expiresAt: result.expiresAt },
       { headers: privateHeaders },
     );
-  } catch {
-    return pinError('PIN verification is unavailable. Please try again.', 503, 'UNAVAILABLE');
+  } catch (error) {
+    return pinServiceUnavailable(error);
   }
 }
 export async function DELETE(req: NextRequest) {

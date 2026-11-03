@@ -182,4 +182,28 @@ describe('real document discrepancy checks', () => {
     const { response } = await inspect(profile, { attachments: [attachment, attachment] });
     expect(response.status).toBe(400);
   });
+  it.each([
+    [{ name: 'TimeoutError' }, 504, 'INSPECTION_TIMEOUT'],
+    [{ status: 400 }, 422, 'INSPECTION_REQUEST_REJECTED'],
+    [{ status: 503 }, 503, 'INSPECTION_PROVIDER_UNAVAILABLE'],
+    [{ cause: { code: 'ECONNRESET' } }, 503, 'INSPECTION_PROVIDER_UNAVAILABLE'],
+    [{ status: 429 }, 503, 'INSPECTION_RATE_LIMIT'],
+  ])('reports the service failure accurately: %j', async (error, status, code) => {
+    generateContent.mockRejectedValue({ ...error, message: 'sensitive provider diagnostics' });
+    const { response, data } = await inspect();
+    expect(response.status).toBe(status);
+    expect(data.code).toBe(code);
+    expect(data.inspection).toBeNull();
+    expect(data.message).not.toContain('sensitive');
+    expect(data.message).not.toContain('clear image');
+  });
+  it('bounds retries and allows dense scans more than 25 seconds', async () => {
+    generateContent.mockResolvedValue(result('Ana Reyes'));
+    await inspect();
+    expect(generateContent.mock.calls[0][0].config.httpOptions).toEqual({
+      timeout: 45000,
+      retryOptions: { attempts: 2, httpStatusCodes: [500, 502, 503, 504] },
+    });
+    expect(generateContent.mock.calls[0][0].config.abortSignal).toBeInstanceOf(AbortSignal);
+  });
 });

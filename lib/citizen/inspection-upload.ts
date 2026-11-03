@@ -19,8 +19,13 @@ export async function encodeInspectionFile(file: File, read: (file: File) => Pro
     throw new Error('This document is too large. Use a file under 3 MB for inspection.');
   if (!file.size)
     throw new Error('The saved document is empty or unavailable. Please upload it again.');
-  const type = inspectionMimeType(file);
+  const sourceType = inspectionMimeType(file);
   const raw = await read(file);
-  const data = raw.slice(raw.indexOf(',') + 1);
+  const match = /^data:([^;,]*);base64,([A-Za-z0-9+/]+={0,2})$/.exec(raw);
+  if (!match) throw new Error('The document could not be read. Please upload it again.');
+  // The image reader may resize PNG/WebP into JPEG. Preserve the encoded
+  // format rather than relabeling JPEG bytes with the original file type.
+  const type = inspectionMimeType({ name: file.name, type: match[1] || sourceType });
+  const data = match[2];
   return { name: file.name, type, dataUrl: `data:${type};base64,${data}` };
 }

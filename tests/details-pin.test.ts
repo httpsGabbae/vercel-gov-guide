@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({ getUser: vi.fn(), rpc: vi.fn(), from: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({ auth: { getUser: mocks.getUser } }),
 }));
-vi.mock('@/lib/supabase/service', () => ({
+vi.mock('@/lib/supabase/service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/service')>()),
   createServiceClient: () => ({ rpc: mocks.rpc, from: mocks.from }),
 }));
 import { GET, POST, DELETE } from '@/app/api/citizen/details/pin/route';
@@ -33,6 +34,8 @@ function request(
   });
 }
 beforeEach(() => {
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key');
+  vi.stubEnv('SERVICE_ROLE_KEY', '');
   vi.clearAllMocks();
   mocks.getUser.mockResolvedValue({ data: { user: { id: 'owner' } }, error: null });
   mocks.rpc.mockResolvedValue({
@@ -40,6 +43,7 @@ beforeEach(() => {
     error: null,
   });
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('PIN setup and unlock API', () => {
   it('gets account-specific setup status without exposing secrets', async () => {
@@ -110,6 +114,43 @@ describe('PIN setup and unlock API', () => {
     expect(res.status).toBe(503);
     expect(await res.text()).not.toContain('database secret');
   });
+  it('identifies a missing production service key without calling the database', async () => {
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    const res = await GET(request());
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe('PIN_SERVER_NOT_CONFIGURED');
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it('loads PIN settings with the existing Vercel SERVICE_ROLE_KEY name', async () => {
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    vi.stubEnv('SERVICE_ROLE_KEY', 'vercel-service-key');
+    mocks.rpc.mockResolvedValue({ data: { configured: true }, error: null });
+    const res = await GET(request());
+    expect(res.status).toBe(200);
+    expect((await res.json()).configured).toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ['PGRST202', 404, 'PIN_DATABASE_NOT_READY'],
+    ['42883', 404, 'PIN_DATABASE_NOT_READY'],
+    ['42501', 403, 'PIN_SERVER_CREDENTIAL_ERROR'],
+    ['PGRST301', 401, 'PIN_SERVER_CREDENTIAL_ERROR'],
+  ])(
+    'identifies deployment failure %s without exposing database details',
+    async (code, status, expected) => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        status,
+        error: { code, message: 'database secret' },
+      });
+      const res = await GET(request());
+      const data = await res.json();
+      expect(res.status).toBe(503);
+      expect(data.code).toBe(expected);
+      expect(data.message).not.toContain('database secret');
+      expect(data.token).toBeUndefined();
+    },
+  );
 });
 
 describe('My Details API protection', () => {

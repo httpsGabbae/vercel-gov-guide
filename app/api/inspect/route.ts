@@ -1,4 +1,5 @@
 import { compareDocumentIdentity, usableIdentity } from '@/lib/ai/document-identity';
+import { inspectionProviderError } from '@/lib/ai/inspection-error';
 export const maxDuration = 60;
 
 import { basicQuestionReply } from '@/lib/ai/basic-questions';
@@ -1426,7 +1427,15 @@ INSPECTION INSTRUCTIONS:
           try {
             const callPromise = ai.models.generateContent({
               model: candidateModel,
-              config: { httpOptions: { timeout: 25000 } },
+              config: {
+                // Allow dense documents time to finish, but bound all attempts below
+                // the route's 60-second limit. Retry only transient server failures.
+                abortSignal: AbortSignal.timeout(45000),
+                httpOptions: {
+                  timeout: 45000,
+                  retryOptions: { attempts: 2, httpStatusCodes: [500, 502, 503, 504] },
+                },
+              },
               contents: [
                 {
                   role: 'user',
@@ -1443,14 +1452,11 @@ INSPECTION INSTRUCTIONS:
               break;
             }
           } catch (modelErr) {
-            const status = Number((modelErr as { status?: number }).status || 0);
-            const message = status === 401 || status === 403
-              ? 'The document service rejected its server credential. Check GEMINI_API_KEY on this deployment and redeploy.'
-              : status === 429 ? 'The document service quota or rate limit was reached. Please retry later.'
-              : status === 404 ? 'The configured inspection model is unavailable. Check GEMINI_INSPECTION_MODEL on the server.'
-              : 'The document service could not complete the scan. Please retry with a clear image or PDF.';
-            console.warn('[api/inspect] Document service failed', { status, model: candidateModel });
-            return NextResponse.json({ ok: false, code: 'INSPECTION_PROVIDER_ERROR', message, inspection: null }, { status: 503 });
+            const failure = inspectionProviderError(modelErr);
+            console.warn('[api/inspect] Document service failed', {
+              status: failure.providerStatus, code: failure.code, model: candidateModel,
+            });
+            return NextResponse.json({ ok: false, code: failure.code, message: failure.message, inspection: null }, { status: failure.status });
           }
         }
 

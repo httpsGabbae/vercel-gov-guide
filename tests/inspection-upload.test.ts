@@ -32,6 +32,25 @@ describe('cross-reference transport', () => {
     ).rejects.toThrow('under 3 MB');
     expect(read).not.toHaveBeenCalled();
   });
+  it.each(['image/png', 'image/webp'])(
+    'preserves JPEG encoding after resizing %s',
+    async (type) => {
+      const result = await encodeInspectionFile(
+        new File(['test'], 'psa.png', { type }),
+        async () => 'data:image/jpeg;base64,/9j/2Q==',
+      );
+      expect(result.type).toBe('image/jpeg');
+      expect(result.dataUrl).toBe('data:image/jpeg;base64,/9j/2Q==');
+    },
+  );
+  it.each(['', 'not-a-data-url', 'data:image/png;base64,'])(
+    'rejects unreadable encoded content: %s',
+    async (raw) => {
+      await expect(
+        encodeInspectionFile(new File(['test'], 'psa.png', { type: 'image/png' }), async () => raw),
+      ).rejects.toThrow('could not be read');
+    },
+  );
   it('preserves actionable server errors for the UI', async () => {
     await expect(
       parseResponseJson(
