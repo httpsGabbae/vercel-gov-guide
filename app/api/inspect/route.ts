@@ -1789,14 +1789,6 @@ INSPECTION INSTRUCTIONS:
       }
     } else if (qaAnswer) {
       replyText = qaAnswer.replyText;
-      if (
-        researchMatches.length > 0 &&
-        effectiveServiceCode !== 'DPWH_PROJECTS' &&
-        effectiveServiceCode !== 'DFA_PASSPORT'
-      ) {
-        const topMatch = researchMatches[0];
-        replyText += `\n\n**[Research Bank Match (\`${topMatch.entry.id}\` · ${topMatch.entry.section})]** ${topMatch.entry.answer}`;
-      }
     } else {
       replyText = isFil
         ? (isNewUser

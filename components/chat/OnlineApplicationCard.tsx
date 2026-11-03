@@ -29,11 +29,6 @@ export function OnlineApplicationCard({
   const portalUrl = isPsaService ? 'https://www.psaserbilis.com.ph/' : data.primaryPortalUrl;
   const portalName = isPsaService ? 'PSA Serbilis' : data.primaryPortalName;
 
-  // 3-sentence summary combining doorstep delivery, walk-in CRS outlet, and when online is not allowed
-  const summaryThreeSentences = isPsaService
-    ? 'Maaari kang mag-order online para sa nationwide doorstep delivery sa loob ng 1–3 araw sa Metro Manila o 3–8 araw sa mga probinsya nang hindi na kailangang pumila sa counter. Kung kailangan ang dokumento sa mismong araw para sa emergency travel o agarang transaksyon, mag-book ng personal appointment sa pinakamalapit na PSA CRS Outlet sa halagang ₱155. Hindi maaaring mag-apply online kung may maling spelling o kailangang itamang rekord sa ilalim ng RA 9048 o RA 10172, na nangangailangan ng personal na pagproseso sa Local Civil Registry Office (LCRO).'
-    : `${data.queueComparison?.online || 'Maaaring mag-apply online para sa doorstep delivery o mabilisang processing.'} Kung kailangan ng agarang transaksyon, mag-book ng personal appointment sa opisyal na branch o outlet. Kung may clerical errors o kulang na statutory requirements, kailangan ng personal appearance sa designated government office.`;
-
   return (
     <div
       role="region"
@@ -113,11 +108,6 @@ export function OnlineApplicationCard({
           </div>
         </div>
       )}
-
-      {/* Combined 3-Sentence Summary (Doorstep Delivery, Walk-in CRS Outlet, Kailan Bawal Online) */}
-      <div className="mt-3.5 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3.5 text-xs sm:text-[12.5px] leading-relaxed text-slate-700">
-        <p>{summaryThreeSentences}</p>
-      </div>
 
       {/* Action Button Bar */}
       <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
