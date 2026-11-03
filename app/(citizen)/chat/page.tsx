@@ -5346,7 +5346,7 @@ export default function CitizenChatPage() {
                 )}
 
                 {/* Composer (`.composer` card - slim) */}
-                <div ref={composerWrapRef} className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-3">
+                <div ref={composerWrapRef} className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-6">
                   <div data-tour="composer" className="composer relative rounded-[16px] bg-white">
                     {attachedFiles.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 px-3 pt-3">

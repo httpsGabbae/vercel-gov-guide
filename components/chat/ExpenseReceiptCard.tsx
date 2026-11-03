@@ -70,20 +70,21 @@ export function ExpenseReceiptCard({
             ? 'DPWH'
             : 'GOV';
 
+  const citizenFirstName =
+    applicantName?.trim() &&
+    applicantName !== 'Guest Account' &&
+    applicantName !== 'Citizen Account' &&
+    applicantName !== 'Citizen Applicant'
+      ? applicantName.split(' ')[0]
+      : 'Aplikante';
+
   return (
     <div
-      className={`relative flex flex-col rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.08)] overflow-hidden transition-all ${className}`}
+      className={`relative flex flex-col rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs overflow-hidden transition-all ${className}`}
     >
-      {/* Top Receipt Decorative Notches (Perforated Edge Effect) */}
-      <div className="relative h-2 w-full bg-slate-100 flex items-center justify-around overflow-hidden border-b border-slate-200/80">
-        {Array.from({ length: 18 }).map((_, i) => (
-          <div key={i} className="h-2 w-2 rounded-full bg-white -mt-2" />
-        ))}
-      </div>
-
-      <div className="p-4 sm:p-4.5 flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col">
         {/* Receipt Header */}
-        <div className="text-center pb-3 border-b border-dashed border-slate-300">
+        <div className="text-center pb-3 border-b border-slate-100">
           <div className="inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase text-slate-500">
             <Receipt className="h-3.5 w-3.5 text-slate-600" />
             <span>Republika ng Pilipinas · {agencyLabel}</span>
@@ -103,7 +104,7 @@ export function ExpenseReceiptCard({
         {/* Applicant Context Tag */}
         <div className="mt-2.5 flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11.5px] text-slate-600">
           <span className="truncate">
-            Para kay: <strong className="text-slate-800">{applicantName.split(' ')[0]}</strong>
+            Para kay: <strong className="text-slate-800">{citizenFirstName}</strong>
           </span>
           {isFirstTimeJobseeker && isNbi && (
             <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800">
@@ -252,7 +253,7 @@ export function ExpenseReceiptCard({
         </div>
 
         {/* Perforated Divider */}
-        <div className="my-3 border-t-2 border-dashed border-slate-300" />
+        <div className="my-3 border-t border-slate-100" />
 
         {/* Total Estimated Expense */}
         <div className="flex items-baseline justify-between">
@@ -384,22 +385,12 @@ export function ExpenseReceiptCard({
           </button>
         )}
 
-        {/* Authentic Barcode Aesthetic at bottom */}
-        <div className="mt-4 pt-2 border-t border-dashed border-slate-200 text-center">
-          <div className="inline-block font-mono text-[10px] tracking-[4px] text-slate-400 select-none">
-            |||| || | ||||| ||| || |||| || |
-          </div>
-          <p className="text-[10px] text-slate-400">
+        {/* Minimalist Certified Standard Footer */}
+        <div className="mt-3.5 pt-2.5 border-t border-slate-100 text-center">
+          <p className="text-[10.5px] font-medium text-slate-400">
             Certified Citizen&apos;s Charter Standard · RA 11032
           </p>
         </div>
-      </div>
-
-      {/* Bottom Receipt Decorative Notches (Perforated Edge Effect) */}
-      <div className="relative h-2 w-full bg-slate-100 flex items-center justify-around overflow-hidden border-t border-slate-200/80">
-        {Array.from({ length: 18 }).map((_, i) => (
-          <div key={i} className="h-2 w-2 rounded-full bg-white -mb-2" />
-        ))}
       </div>
     </div>
   );
