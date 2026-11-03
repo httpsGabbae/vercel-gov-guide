@@ -87,4 +87,41 @@ describe('GovGuide PH Chrome Extension — Heuristics & Vault Engine', () => {
     expect(vault.mobileNumber).toBe('0917-555-0192');
     expect(vault.relationshipToOwner).toBe('Self');
   });
+  it('safely isolates citizens when switching users and prevents data leakage', () => {
+    const userA = {
+      first_name: 'Juan',
+      middle_name: 'Santos',
+      last_name: 'Dela Cruz',
+      phone: '0917-555-0192',
+      email: 'juan@example.com',
+      father_first_name: 'Roberto',
+      mother_maiden_name: 'Maria Gomez Santos',
+      philsys_id: '1234-5678-9012-3456',
+      tin: '123-456-789-000',
+      sss_number: '03-9876543-2',
+      philhealth_number: '12-345678901-2',
+    };
+    const vaultA = applicantToVault(userA);
+    expect(vaultA.firstName).toBe('Juan');
+    expect(vaultA.philsysId).toBe('1234-5678-9012-3456');
+    expect(vaultA.sssNumber).toBe('03-9876543-2');
+
+    const userB = {
+      first_name: 'Lorraine',
+      middle_name: 'Lasi',
+      last_name: 'Cabatic',
+      email: 'lorraine@example.com',
+      phone: '0918-123-4567',
+      philsys_id: '2631-2509-8106-8349',
+    };
+    const vaultB = applicantToVault(userB, vaultA);
+    expect(vaultB.firstName).toBe('Lorraine');
+    expect(vaultB.lastName).toBe('Cabatic');
+    expect(vaultB.philsysId).toBe('2631-2509-8106-8349');
+    expect(vaultB.sssNumber).toBe('');
+    expect(vaultB.tin).toBe('');
+    expect(vaultB.philhealthNumber).toBe('');
+    expect(vaultB.fatherFirstName).toBe('');
+    expect(vaultB.motherMaidenLastName).toBe('');
+  });
 });

@@ -548,14 +548,16 @@ export function evaluateGuardrails(
     /\b(write\s+a\s+(poem|song|essay|python|javascript|react|sql)|solve\s+this\s+math|bitcoin|crypto|stock\s+market|forex|recipe|cook|adobo|sinigang|halo-?halo|regalo|pasko|eleksyon\s+sa\s+amerika|kantahan|gawan\s+ng\s+tula|fix\s+my\s+car|car\s+engine|scrape\s+facebook|capital\s+of\s+france|nba\s+championship|nba\s+score|movie\s+review|horoscope|zodiac|videogame|valorant|dota|minecraft)\b/i,
   ];
 
-  const isGreeting =
-    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|kaagapai|there|friend)|\s*[!?.])*$/i.test(text) ||
-    (text.split(/\s+/).length <= 4 && /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text));
+  const isAssistantIdentityOrGreeting =
+    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|kaagapai|there|friend)|\s*[!?.])*$/i.test(text) ||
+    (text.split(/\s+/).length <= 4 && /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text)) ||
+    /^(who|what|sino|ano)\s+(are|is|r)\s+(you|u|this|govguide|kaagap)/i.test(text) ||
+    /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+ka\s+ba|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|how\s+can\s+you\s+help|what\s+services\s+do\s+you|ano\s+ang\s+magagawa\s+mo|paano\s+ka\s+makakatulong|magpakilala\s+ka|help\s+me|can\s+you\s+help|pwede\s+magtanong)\b/i.test(text);
 
   const isOutOfScope =
     isPureNumberOrSymbols ||
     obviousOutOfScopePatterns.some((rx) => rx.test(text)) ||
-    (!isGreeting && !civicOrSystemKeywords.test(text));
+    (!isAssistantIdentityOrGreeting && !civicOrSystemKeywords.test(text));
 
   if (isOutOfScope) {
     return {
@@ -663,27 +665,45 @@ export function answerSystemQuestion(
           : 'GENERAL');
   const serviceDef = SERVICES_REGISTRY[resolvedCode] || SERVICES_REGISTRY.NBI_CLEARANCE;
 
-  // 1. Greetings / General Help / System Overview
+  // 1. Greetings / Assistant Identity / General Help / System Overview
   if (
-    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta|help|tulong|what\s+can\s+you\s+do|ano\s+ang\s+kaya\s+mong\s+gawin|how\s+does\s+this\s+work)\b/i.test(
+    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta|help|tulong|who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|ano\s+ang\s+kaya\s+mong\s+gawin|how\s+does\s+this\s+work|how\s+can\s+you\s+help|what\s+services\s+do\s+you)\b/i.test(
       lower,
     ) &&
-    text.split(/\s+/).length <= 10
+    text.split(/\s+/).length <= 15
   ) {
+    const isIdentityQuery = /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself)\b/i.test(
+      lower,
+    );
+
     return {
-      serviceCode: 'NBI_CLEARANCE',
+      serviceCode: 'GENERAL',
       includeChecklist: false,
       steps: [
         'Verified active citizen profile & Citizen’s Charter knowledge base',
         'Prepared overview of supported government services & AI document checks',
       ],
-      replyText: (!applicant.display_name || applicant.role === 'new_citizen')
-        ? (isFil
-          ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat. Ako ang GovGuide PH, ang iyong gabay sa mga serbisyo ng gobyerno.'
-          : 'Please fill up the form in My Details first before chatting. I am GovGuide PH, your guide for government services.')
-        : (isFil
-          ? `Magandang araw, **${applicant.display_name}**! Ako ang **GovGuide PH**, ang iyong AI Pre-Flight Assistant para maiwasan ang *balik-pila* sa gobyerno. Maaari mo akong tanungin tungkol sa mga opisyal na requirements, bayarin, at mga proseso ng ahensya.`
-          : `Hello, **${applicant.display_name}**! I am **GovGuide PH**, your AI Pre-Flight Assistant designed to eliminate repeat queueing (*balik-pila*). I can help you with official requirements, fees, and government agency processes.`),
+      replyText: isIdentityQuery
+        ? isFil
+          ? `Magandang araw! Ako si **GovGuide PH**, ang iyong AI Citizen Pre-Flight Assistant para sa mga serbisyo ng gobyerno ng Pilipinas.\n\n` +
+            `Ang layunin ko ay tulungan kang maging **Counter-Ready** at maiwasan ang *balik-pila* sa pamamagitan ng:\n` +
+            `• **Pagsusuri ng Requirements:** Gabay sa mga kailangang dokumento, bayarin, at proseso ayon sa opisyal na Citizen's Charter ng **NBI, PSA, PhilHealth, at DFA**.\n` +
+            `• **AI Document Inspection:** Pag-check ng iyong mga ID o certificate para maagang makita ang mga expired date, typographical error, o kulang na pirma at selyo bago ka pumunta sa ahensya.\n` +
+            `• **Paghahanda ng Form Drafts:** Pagtulong sa pag-fill up at pag-review ng iyong application data nang ligtas at protektado sa ilalim ng **RA 10173 (Data Privacy Act)**.\n\n` +
+            `Ano pong serbisyo o dokumento ang nais mong isangguni ngayon?`
+          : `Hello! I am **GovGuide PH**, your AI Citizen Pre-Flight Assistant designed to eliminate repeat queueing (*balik-pila*) at Philippine government agencies.\n\n` +
+            `I help citizens become **Counter-Ready** by:\n` +
+            `• **Charter Requirements & Fees:** Providing official requirements, turnaround times, and fee breakdowns for **NBI Clearance, PSA Civil Registry, PhilHealth, and DFA Passports**.\n` +
+            `• **AI Pre-Flight Document Inspection:** Catching expired dates, spelling/birthdate mismatches, and missing signatures or dry seals before you queue at the counter.\n` +
+            `• **Service Form Draft Preparation:** Helping you review and prepare application data safely under **RA 10173 (Data Privacy Act of 2012)**.\n\n` +
+            `How can I assist you with your government transactions today?`
+        : !applicant.display_name || applicant.role === 'new_citizen'
+          ? isFil
+            ? 'Magandang araw! Ako ang GovGuide PH, ang iyong gabay sa mga serbisyo ng pamahalaan. Maaari kang magtanong tungkol sa NBI Clearance, PSA Birth Certificate, PhilHealth, o DFA Passport, o punan ang iyong profile sa My Details para sa personalized na gabay.'
+            : 'Hello! I am GovGuide PH, your guide for Philippine government services. You can ask about NBI Clearance, PSA Birth Certificates, PhilHealth, or DFA Passports, or fill up your profile in My Details for personalized guidance.'
+          : isFil
+            ? `Magandang araw, **${applicant.display_name}**! Ako ang **GovGuide PH**, ang iyong AI Pre-Flight Assistant para maiwasan ang *balik-pila* sa gobyerno. Maaari mo akong tanungin tungkol sa mga opisyal na requirements, bayarin, at mga proseso ng ahensya.`
+            : `Hello, **${applicant.display_name}**! I am **GovGuide PH**, your AI Pre-Flight Assistant designed to eliminate repeat queueing (*balik-pila*). I can help you with official requirements, fees, and government agency processes.`,
     };
   }
 

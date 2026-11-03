@@ -251,17 +251,19 @@ function runDeterministicInspection(
 
   const isDemoJobseeker =
     applicant.role === 'jobseeker' && (applicant.display_name || '').toLowerCase().includes('juan');
-  const isCabatic = lowerFile.includes('cabatic');
-  const extractedDocName = isCabatic
-    ? 'CABATIC, LORRAINE LASI'
-    : (applicant.display_name?.trim() && applicant.display_name !== 'Guest Account' && applicant.display_name !== 'Citizen Account'
-        ? applicant.display_name
-        : (isDemoJobseeker ? 'DELA CRUZ, JUAN SANTOS' : 'CITIZEN APPLICANT'));
-  const extractedDocDob = isCabatic
-    ? '2007-07-23'
-    : (applicant.birth_date?.trim()
-        ? applicant.birth_date
-        : (isDemoJobseeker ? '1999-05-14' : 'Foundational Record'));
+  const hasExplicitCabaticDoc = lowerFile.includes('cabatic');
+  const hasCitizenName = Boolean(
+    applicant.display_name?.trim() &&
+    applicant.display_name !== 'Guest Account' &&
+    applicant.display_name !== 'Citizen Account'
+  );
+  const isCabatic = hasExplicitCabaticDoc && !hasCitizenName;
+  const extractedDocName = hasCitizenName
+    ? applicant.display_name!
+    : (isCabatic ? 'CABATIC, LORRAINE LASI' : (isDemoJobseeker ? 'DELA CRUZ, JUAN SANTOS' : 'CITIZEN APPLICANT'));
+  const extractedDocDob = applicant.birth_date?.trim()
+    ? applicant.birth_date
+    : (isCabatic ? '2007-07-23' : (isDemoJobseeker ? '1999-05-14' : 'Foundational Record'));
 
   // Case 1: Demo or Uploaded Barangay Certificate (Incomplete / Expired / Missing Dry Seal & Signature)
   if (
@@ -400,19 +402,17 @@ function runDeterministicInspection(
       !lowerText.includes('mismatch') &&
       !lowerText.includes('missing'))
   ) {
-    const dispName = isCabatic
-      ? 'Lorraine Lasi Cabatic'
-      : (applicant.display_name?.trim() && applicant.display_name !== 'Guest Account' && applicant.display_name !== 'Citizen Account'
-          ? applicant.display_name
-          : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
-    const dispDob = isCabatic
-      ? '2007-07-23'
-      : (applicant.birth_date?.trim() || (isDemoJobseeker ? '1999-05-14' : 'Foundational Identity Record'));
+    const dispName = hasCitizenName
+      ? applicant.display_name!
+      : (isCabatic ? 'Lorraine Lasi Cabatic' : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
+    const dispDob = applicant.birth_date?.trim()
+      ? applicant.birth_date
+      : (isCabatic ? '2007-07-23' : (isDemoJobseeker ? '1999-05-14' : 'Foundational Identity Record'));
 
     return {
       id: `insp-${Date.now()}`,
       document_title: 'PSA Certificate of Live Birth (SECPA Security Paper)',
-      file_name: firstFile || 'cabatic-psa.jpg',
+      file_name: firstFile || (isCabatic ? 'cabatic-psa.jpg' : 'psa-birth-certificate.jpg'),
       service_code: serviceDef.code,
       service_name: serviceDef.name,
       applicant_name: dispName,
@@ -488,73 +488,73 @@ function runDeterministicInspection(
         {
           key: 'father_name',
           label: "Father's Full Name",
-          value: isCabatic ? 'Joselito Bernas Cabatic' : (applicant.father_name?.trim() || 'Roberto Mendoza Dela Cruz'),
+          value: applicant.father_name?.trim() || (isCabatic ? 'Joselito Bernas Cabatic' : 'Roberto Mendoza Dela Cruz'),
           status: 'valid',
         },
         {
           key: 'father_first_name',
           label: "Father's First Name",
-          value: isCabatic ? 'Joselito' : (applicant.father_first_name?.trim() || 'Roberto'),
+          value: applicant.father_first_name?.trim() || (isCabatic ? 'Joselito' : 'Roberto'),
           status: 'valid',
         },
         {
           key: 'father_middle_name',
           label: "Father's Middle Name",
-          value: isCabatic ? 'Bernas' : (applicant.father_middle_name?.trim() || 'Mendoza'),
+          value: applicant.father_middle_name?.trim() || (isCabatic ? 'Bernas' : 'Mendoza'),
           status: 'valid',
         },
         {
           key: 'father_last_name',
           label: "Father's Last Name",
-          value: isCabatic ? 'Cabatic' : (applicant.father_last_name?.trim() || 'Dela Cruz'),
+          value: applicant.father_last_name?.trim() || (isCabatic ? 'Cabatic' : 'Dela Cruz'),
           status: 'valid',
         },
         {
           key: 'mother_maiden_name',
           label: "Mother's Maiden Name",
-          value: isCabatic ? 'Rowena Tagle Lasi' : (applicant.mother_maiden_name?.trim() || 'Maria Gomez Santos'),
+          value: applicant.mother_maiden_name?.trim() || (isCabatic ? 'Rowena Tagle Lasi' : 'Maria Gomez Santos'),
           status: 'valid',
         },
         {
           key: 'mother_first_name',
           label: "Mother's First Name",
-          value: isCabatic ? 'Rowena' : (applicant.mother_first_name?.trim() || 'Maria'),
+          value: applicant.mother_first_name?.trim() || (isCabatic ? 'Rowena' : 'Maria'),
           status: 'valid',
         },
         {
           key: 'mother_middle_name',
           label: "Mother's Middle Name",
-          value: isCabatic ? 'Tagle' : (applicant.mother_middle_name?.trim() || 'Gomez'),
+          value: applicant.mother_middle_name?.trim() || (isCabatic ? 'Tagle' : 'Gomez'),
           status: 'valid',
         },
         {
           key: 'mother_last_name',
           label: "Mother's Maiden Last Name",
-          value: isCabatic ? 'Lasi' : (applicant.mother_last_name?.trim() || 'Santos'),
+          value: applicant.mother_last_name?.trim() || (isCabatic ? 'Lasi' : 'Santos'),
           status: 'valid',
         },
         {
           key: 'place_of_birth',
           label: 'Place of Birth',
-          value: isCabatic ? 'Divine Love General Hospital, Lipa City, Batangas' : (applicant.place_of_birth?.trim() || 'Quezon City General Hospital, Quezon City, Metro Manila'),
+          value: applicant.place_of_birth?.trim() || (isCabatic ? 'Divine Love General Hospital, Lipa City, Batangas' : 'Quezon City General Hospital, Quezon City, Metro Manila'),
           status: 'valid',
         },
         {
           key: 'city',
           label: 'City / Municipality',
-          value: isCabatic ? 'Lipa City' : (applicant.city?.trim() || 'Quezon City'),
+          value: applicant.city?.trim() || (isCabatic ? 'Lipa City' : 'Quezon City'),
           status: 'valid',
         },
         {
           key: 'province',
           label: 'Province',
-          value: isCabatic ? 'Batangas' : (applicant.province?.trim() || 'Metro Manila'),
+          value: applicant.province?.trim() || (isCabatic ? 'Batangas' : 'Metro Manila'),
           status: 'valid',
         },
         {
           key: 'gender',
           label: 'Sex',
-          value: isCabatic ? 'Female' : (applicant.gender?.trim() || 'Male'),
+          value: applicant.gender?.trim() || (isCabatic ? 'Female' : 'Male'),
           status: 'valid',
         },
       ],
@@ -572,18 +572,16 @@ function runDeterministicInspection(
       !lowerText.includes('mismatch') &&
       !lowerText.includes('missing'))
   ) {
-    const dispName = isCabatic
-      ? 'Lorraine Lasi Cabatic'
-      : (applicant.display_name?.trim() && applicant.display_name !== 'Guest Account' && applicant.display_name !== 'Citizen Account'
-          ? applicant.display_name
-          : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
-    const dispDob = isCabatic
-      ? '2007-07-23'
-      : (applicant.birth_date?.trim() || (isDemoJobseeker ? '1999-05-14' : 'Permanent Record'));
+    const dispName = hasCitizenName
+      ? applicant.display_name!
+      : (isCabatic ? 'Lorraine Lasi Cabatic' : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
+    const dispDob = applicant.birth_date?.trim()
+      ? applicant.birth_date
+      : (isCabatic ? '2007-07-23' : (isDemoJobseeker ? '1999-05-14' : 'Permanent Record'));
     return {
       id: `insp-${Date.now()}`,
       document_title: 'PhilSys National ID (Pambansang Pagkakakilanlan)',
-      file_name: firstFile || 'valid-philsys-id.png',
+      file_name: firstFile || (isCabatic ? 'cabatic-philsys-id.png' : 'valid-philsys-id.png'),
       service_code: serviceDef.code,
       service_name: serviceDef.name,
       applicant_name: dispName,
@@ -592,12 +590,16 @@ function runDeterministicInspection(
       summary_counts: { expired: 0, mismatch: 0, missing: 0, valid: 4 },
       preview_lines: [
         'REPUBLIC OF THE PHILIPPINES · PSA PHILSYS',
-        isCabatic ? 'PCN: 2631-2509-8106-8349' : 'PCN: 4928-••••-••••-9104 [RA 10173 MASKED]',
+        applicant.philsys_id?.trim()
+          ? `PCN: ${applicant.philsys_id}`
+          : (isCabatic ? 'PCN: 2631-2509-8106-8349' : 'PCN: 4928-••••-••••-9104 [RA 10173 MASKED]'),
         `NAME: ${dispName.toUpperCase()}`,
         `DOB: ${dispDob} (MATCHES CITIZEN CHARTER STANDARDS)`,
-        isCabatic
-          ? 'ADDRESS: PUROK 5 SITIO SAMPALUCAN, BRGY. SANTO TORIBIO, LIPA CITY, BATANGAS'
-          : 'ADDRESS: REGISTERED RESIDENTIAL ADDRESS VERIFIED',
+        applicant.residential_address?.trim()
+          ? `ADDRESS: ${applicant.residential_address.toUpperCase()}`
+          : (isCabatic
+              ? 'ADDRESS: PUROK 5 SITIO SAMPALUCAN, BRGY. SANTO TORIBIO, LIPA CITY, BATANGAS'
+              : 'ADDRESS: REGISTERED RESIDENTIAL ADDRESS VERIFIED'),
         'VALIDITY: PERMANENT / NON-EXPIRING (RA 11055)',
         'QR CODE & PHOTO: HIGH CLARITY · VERIFIED',
       ],
@@ -644,51 +646,51 @@ function runDeterministicInspection(
         {
           key: 'id_number',
           label: 'PhilSys Card Number',
-          value: isCabatic ? '2631-2509-8106-8349' : (applicant.philsys_id?.trim() || '4928-1039-8472-9104'),
+          value: applicant.philsys_id?.trim() || (isCabatic ? '2631-2509-8106-8349' : '4928-1039-8472-9104'),
           status: 'valid',
         },
         {
           key: 'philsys_id',
           label: 'PhilSys Card Number',
-          value: isCabatic ? '2631-2509-8106-8349' : (applicant.philsys_id?.trim() || '4928-1039-8472-9104'),
+          value: applicant.philsys_id?.trim() || (isCabatic ? '2631-2509-8106-8349' : '4928-1039-8472-9104'),
           status: 'valid',
         },
         {
           key: 'barangay',
           label: 'Barangay',
-          value: isCabatic ? 'Brgy. Santo Toribio' : (applicant.barangay?.trim() || 'Brgy. San Isidro'),
+          value: applicant.barangay?.trim() || (isCabatic ? 'Brgy. Santo Toribio' : 'Brgy. San Isidro'),
           status: 'valid',
         },
         {
           key: 'city',
           label: 'City / Municipality',
-          value: isCabatic ? 'Lipa City' : (applicant.city?.trim() || 'Quezon City'),
+          value: applicant.city?.trim() || (isCabatic ? 'Lipa City' : 'Quezon City'),
           status: 'valid',
         },
         {
           key: 'province',
           label: 'Province',
-          value: isCabatic ? 'Batangas' : (applicant.province?.trim() || 'Metro Manila'),
+          value: applicant.province?.trim() || (isCabatic ? 'Batangas' : 'Metro Manila'),
           status: 'valid',
         },
         {
           key: 'street_address',
           label: 'Address',
-          value: isCabatic ? 'Purok 5 Sitio Sampalucan' : (applicant.street_address?.trim() || '42 Magsaysay Ave'),
+          value: applicant.street_address?.trim() || (isCabatic ? 'Purok 5 Sitio Sampalucan' : '42 Magsaysay Ave'),
           status: 'valid',
         },
         {
           key: 'residential_address',
           label: 'Residential Address',
-          value: isCabatic
+          value: applicant.residential_address?.trim() || (isCabatic
             ? 'Purok 5 Sitio Sampalucan, Brgy. Santo Toribio, Lipa City, Batangas'
-            : (applicant.residential_address?.trim() || '42 Magsaysay Ave, Brgy. San Isidro, Quezon City'),
+            : '42 Magsaysay Ave, Brgy. San Isidro, Quezon City'),
           status: 'valid',
         },
         {
           key: 'gender',
           label: 'Sex',
-          value: isCabatic ? 'Female' : (applicant.gender?.trim() || 'Male'),
+          value: applicant.gender?.trim() || (isCabatic ? 'Female' : 'Male'),
           status: 'valid',
         },
         {
@@ -708,14 +710,12 @@ function runDeterministicInspection(
     lowerFile.includes('dfa') ||
     (lowerText.includes('passport') && !lowerText.includes('expire'))
   ) {
-    const dispName = isCabatic
-      ? 'Lorraine Lasi Cabatic'
-      : (applicant.display_name?.trim() && applicant.display_name !== 'Guest Account' && applicant.display_name !== 'Citizen Account'
-          ? applicant.display_name
-          : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
-    const dispDob = isCabatic
-      ? '2007-07-23'
-      : (applicant.birth_date?.trim() || (isDemoJobseeker ? '1999-05-14' : 'Primary ID Record'));
+    const dispName = hasCitizenName
+      ? applicant.display_name!
+      : (isCabatic ? 'Lorraine Lasi Cabatic' : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
+    const dispDob = applicant.birth_date?.trim()
+      ? applicant.birth_date
+      : (isCabatic ? '2007-07-23' : (isDemoJobseeker ? '1999-05-14' : 'Primary ID Record'));
     return {
       id: `insp-${Date.now()}`,
       document_title: 'Philippine ePassport (DFA Consular Primary ID)',
@@ -775,14 +775,12 @@ function runDeterministicInspection(
     lowerFile.includes('lto') ||
     (lowerText.includes('license') && !lowerText.includes('expire'))
   ) {
-    const dispName = isCabatic
-      ? 'Lorraine Lasi Cabatic'
-      : (applicant.display_name?.trim() && applicant.display_name !== 'Guest Account' && applicant.display_name !== 'Citizen Account'
-          ? applicant.display_name
-          : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
-    const dispDob = isCabatic
-      ? '2007-07-23'
-      : (applicant.birth_date?.trim() || (isDemoJobseeker ? '1999-05-14' : 'License Record'));
+    const dispName = hasCitizenName
+      ? applicant.display_name!
+      : (isCabatic ? 'Lorraine Lasi Cabatic' : (isDemoJobseeker ? 'Juan Santos Dela Cruz' : 'Citizen Applicant'));
+    const dispDob = applicant.birth_date?.trim()
+      ? applicant.birth_date
+      : (isCabatic ? '2007-07-23' : (isDemoJobseeker ? '1999-05-14' : 'License Record'));
     return {
       id: `insp-${Date.now()}`,
       document_title: 'LTO Driver’s License (Land Transportation Office)',
@@ -1562,9 +1560,15 @@ INSPECTION INSTRUCTIONS:
             if (!learnedDetails.province && pob.province) learnedDetails.province = pob.province;
           }
 
-          // 4. Preserve Cabatic test fixture details
-          const isCabatic = (attachments[0]?.name || '').toLowerCase().includes('cabatic');
-          if (isCabatic) {
+          // 4. Preserve Cabatic test fixture details ONLY when explicitly testing that file AND user has not set their own citizen profile name
+          const isExplicitCabaticFile = (attachments[0]?.name || '').toLowerCase().includes('cabatic');
+          const hasExistingCitizenProfile = Boolean(
+            applicant.display_name?.trim() &&
+            applicant.display_name !== 'Guest Account' &&
+            applicant.display_name !== 'Citizen Account' &&
+            applicant.role !== 'new_citizen'
+          );
+          if (isExplicitCabaticFile && !hasExistingCitizenProfile) {
             learnedDetails.display_name = 'Lorraine Lasi Cabatic';
             learnedDetails.first_name = 'Lorraine';
             learnedDetails.middle_name = 'Lasi';
@@ -1803,10 +1807,10 @@ INSPECTION INSTRUCTIONS:
             : `Here is your official **Requirements Checklist** for **${checklist?.service_name || 'government services'}** personalized with your **My Details** profile (**${applicant.display_name}**). You can manage your saved files, checklists, and inspections in **My Details**, or attach photos/PDFs here for an AI pre-flight check.`);
     }
 
-    if (isNewUser && !inspection) {
+    if (isNewUser && !inspection && !isGreeting && qaAnswer?.includeChecklist !== false) {
       const fillNotice = isFil
-        ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat.'
-        : 'Please fill up the form in My Details first before chatting.';
+        ? 'Paalala: Maaari mo ring punan ang iyong profile sa My Details para sa personalized na pagsusuri ng dokumento.'
+        : 'Note: You can also update your profile in My Details for personalized document pre-flight checks.';
       if (!replyText.includes(fillNotice)) {
         replyText = fillNotice + '\n\n' + replyText;
       }

@@ -1677,7 +1677,7 @@ export interface NextActionItem {
   hint?: string;
   action: 'message' | 'attach' | 'demo_file' | 'view';
   text?: string;
-  view?: 'chat' | 'details' | 'referrals' | 'tasks' | 'log' | 'notifications';
+  view?: 'chat' | 'details' | 'referrals' | 'tasks' | 'notifications';
   file?: { path: string; name: string; type: string };
 }
 
@@ -1747,6 +1747,14 @@ function computeInitials(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
+
+const CHECKLIST_SECTIONS = [
+  { code: 'NBI_CLEARANCE', label: 'NBI Clearance' },
+  { code: 'PSA_BIRTH_CERT', label: 'PSA Birth Certificate' },
+  { code: 'DFA_PASSPORT', label: 'DFA Passport' },
+  { code: 'PHILHEALTH_REGISTRATION', label: 'PhilHealth Registration' },
+  { code: 'DPWH_PROJECTS', label: 'DPWH Projects' },
+];
 
 function MyDetailsView({
   applicant,
@@ -1909,13 +1917,7 @@ function MyDetailsView({
     });
   }, [inspections, filter, search]);
 
-  const checklistSections = [
-    { code: 'NBI_CLEARANCE', label: 'NBI Clearance' },
-    { code: 'PSA_BIRTH_CERT', label: 'PSA Birth Certificate' },
-    { code: 'DFA_PASSPORT', label: 'DFA Passport' },
-    { code: 'PHILHEALTH_REGISTRATION', label: 'PhilHealth Registration' },
-    { code: 'DPWH_PROJECTS', label: 'DPWH Projects' },
-  ];
+  const checklistSections = CHECKLIST_SECTIONS;
 
   const isJobseekerDemo = applicant.role === 'jobseeker' && (applicant.display_name || '').toLowerCase().includes('juan');
   const isMarriedDemo = applicant.role === 'married_applicant';
@@ -2688,158 +2690,6 @@ function MyDetailsView({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Audit Log View (GovGuide PH Hash-Chained Access & Inspection Log)         */
-/* -------------------------------------------------------------------------- */
-
-function AuditLogView({ logs }: { logs: AuditEntry[] }) {
-  const [verifyState, setVerifyState] = useState<'idle' | 'checking' | 'intact'>('idle');
-  const [openId, setOpenId] = useState<string | null>(null);
-
-  const handleVerify = async () => {
-    setVerifyState('checking');
-    await new Promise((r) => setTimeout(r, 900));
-    setVerifyState('intact');
-  };
-
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1104px] px-8 pt-10 pb-16">
-        <header className="flex flex-wrap items-start justify-between gap-4 pb-8">
-          <div className="min-w-0">
-            <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em]">
-              Audit &amp; Privacy Log
-            </h1>
-            <p className="mt-1 text-[14px] text-[var(--label-2)]">
-              Append-only, hash-chained record of every AI document inspection and checklist check
-              (RA 10173 Data Privacy Act compliant).
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleVerify}
-            disabled={verifyState === 'checking'}
-            className="btn btn-secondary btn-sm press"
-          >
-            {verifyState === 'checking' ? (
-              <Spinner className="text-[var(--brand)]" />
-            ) : (
-              Icons.log
-            )}
-            <span>Verify integrity</span>
-          </button>
-        </header>
-
-        {verifyState !== 'idle' && (
-          <div
-            aria-live="polite"
-            className={`enter mb-6 flex items-center gap-3 rounded-[10px] px-4 py-3 text-[13px] ${verifyState === 'checking' ? 'bg-[var(--fill)]' : 'bg-[var(--brand-soft)]'
-              }`}
-          >
-            {verifyState === 'checking' ? (
-              <>
-                <Spinner className="text-[var(--brand)]" />
-                <span>Verifying cryptographic hash chain...</span>
-              </>
-            ) : (
-              <>
-                <span className="text-[var(--brand)]">{Icons.check}</span>
-                <span>
-                  <span className="font-medium">Chain intact.</span>{' '}
-                  <span className="text-[var(--label-2)]">
-                    {logs.length} entries verified, zero permanent biometric storage, no edits or
-                    gaps.
-                  </span>
-                </span>
-              </>
-            )}
-          </div>
-        )}
-
-        <div
-          aria-hidden="true"
-          className="hidden border-b border-[var(--hairline)] pb-2 text-[11px] font-medium tracking-[0.06em] text-[var(--label-3)] uppercase md:grid md:grid-cols-[80px_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,1fr)_110px_16px] md:gap-5"
-        >
-          <span>Time</span>
-          <span>Applicant</span>
-          <span>Action &amp; Findings</span>
-          <span>Document</span>
-          <span>Result</span>
-          <span />
-        </div>
-
-        <ul>
-          {logs.map((entry) => {
-            const isOpen = openId === entry.id;
-            return (
-              <li key={entry.id} className="border-b border-[var(--hairline)]">
-                <button
-                  type="button"
-                  onClick={() => setOpenId((prev) => (prev === entry.id ? null : entry.id))}
-                  aria-expanded={isOpen}
-                  className="row-btn grid w-full grid-cols-1 items-center gap-1 py-3 text-left md:-mx-3 md:w-[calc(100%+24px)] md:grid-cols-[80px_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,1fr)_110px_16px] md:gap-5 md:rounded-[10px] md:px-3"
-                >
-                  <span className="font-mono text-[12px] text-[var(--label-2)] tabular-nums">
-                    {new Date(entry.ts).toLocaleTimeString([], {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  <span className="truncate text-[13px] font-medium">{entry.user_name}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px]">{entry.action}</span>
-                    {entry.reason && (
-                      <span className="block truncate text-[12px] text-[var(--label-2)]">
-                        &ldquo;{entry.reason}&rdquo;
-                      </span>
-                    )}
-                  </span>
-                  <span className="truncate text-[13px] text-[var(--label-2)]">
-                    {entry.document_name ?? '-'}
-                  </span>
-                  <span>
-                    <span className="inline-flex items-center gap-2 text-[13px] font-medium">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${entry.flagged ? 'bg-[var(--accent)]' : 'bg-[var(--brand)]'
-                          }`}
-                      />
-                      {entry.flagged ? 'Flagged Issue' : 'Verified'}
-                    </span>
-                  </span>
-                  <span
-                    className="chev hidden text-[var(--label-3)] md:inline-flex"
-                    data-open={isOpen}
-                  >
-                    {Icons.chevronRight}
-                  </span>
-                </button>
-                <div className="disclosure" data-open={isOpen}>
-                  <div>
-                    <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-1.5 pt-1 pb-4 font-mono text-[12px] md:pl-[84px]">
-                      <dt className="text-[var(--label-3)]">entry</dt>
-                      <dd className="break-all">{entry.id}</dd>
-                      <dt className="text-[var(--label-3)]">tool</dt>
-                      <dd className="break-all">{entry.tool ?? '-'}</dd>
-                      <dt className="text-[var(--label-3)]">timestamp</dt>
-                      <dd className="break-all">{entry.ts}</dd>
-                      <dt className="text-[var(--label-3)]">hash</dt>
-                      <dd className="break-all text-[var(--label-2)]">{entry.hash}</dd>
-                      <dt className="text-[var(--label-3)]">prev_hash</dt>
-                      <dd className="break-all text-[var(--label-2)]">
-                        {entry.prev_hash ?? 'null (genesis)'}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Slide-Over Official Charter Source Drawer (`tb` panel)                    */
 /* -------------------------------------------------------------------------- */
 
@@ -3167,7 +3017,7 @@ const subscribeNoop = () => () => { };
 export default function CitizenChatPage() {
   const [role, setRole] = useState<'jobseeker' | 'married_applicant' | 'new_citizen'>('new_citizen');
   const [view, setView] = useState<
-    'chat' | 'details' | 'referrals' | 'tasks' | 'log' | 'notifications'
+    'chat' | 'details' | 'referrals' | 'tasks' | 'notifications'
   >('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -3837,10 +3687,25 @@ export default function CitizenChatPage() {
 
         // Learn personal details from chat and update My Details profile in real-time
         if (data.learnedDetails && Object.keys(data.learnedDetails).length > 0) {
-          setApplicant((prev) => ({
-            ...prev,
-            ...data.learnedDetails,
-          }));
+          setApplicant((prev) => {
+            const hasExistingName = Boolean(
+              prev.display_name &&
+              prev.display_name !== 'Guest Account' &&
+              prev.display_name !== 'Citizen Account' &&
+              prev.role !== 'new_citizen'
+            );
+            const sanitized = { ...data.learnedDetails };
+            if (hasExistingName) {
+              delete sanitized.display_name;
+              delete sanitized.first_name;
+              delete sanitized.middle_name;
+              delete sanitized.last_name;
+            }
+            return {
+              ...prev,
+              ...sanitized,
+            };
+          });
         }
 
         // Sync any newly created service process from inquiry into agencyMilestones
@@ -4228,10 +4093,25 @@ export default function CitizenChatPage() {
           if (res.ok) {
             const { data } = await safeResponseJson(res);
             if (data?.learnedDetails && Object.keys(data.learnedDetails).length > 0) {
-              setApplicant((prev) => ({
-                ...prev,
-                ...data.learnedDetails,
-              }));
+              setApplicant((prev) => {
+                const hasExistingName = Boolean(
+                  prev.display_name &&
+                  prev.display_name !== 'Guest Account' &&
+                  prev.display_name !== 'Citizen Account' &&
+                  prev.role !== 'new_citizen'
+                );
+                const sanitized = { ...data.learnedDetails };
+                if (hasExistingName) {
+                  delete sanitized.display_name;
+                  delete sanitized.first_name;
+                  delete sanitized.middle_name;
+                  delete sanitized.last_name;
+                }
+                return {
+                  ...prev,
+                  ...sanitized,
+                };
+              });
             }
 
             const report: InspectionReport | undefined =
@@ -4799,23 +4679,6 @@ export default function CitizenChatPage() {
                   </span>
                 )}
               </button>
-
-              <button
-                type="button"
-                data-tour="nav-log"
-                aria-current={view === 'log' ? 'page' : undefined}
-                onClick={() => {
-                  setView('log');
-                  setMobileMenuOpen(false);
-                }}
-                className={`row-btn press flex h-8 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] ${view === 'log' ? 'bg-[var(--fill-2)] font-medium' : ''
-                  }`}
-              >
-                <span className={view === 'log' ? 'text-[var(--brand)]' : 'text-[var(--label-2)]'}>
-                  {Icons.log}
-                </span>
-                <span className="flex-1">Audit log</span>
-              </button>
             </nav>
 
             <div className="mx-4 my-3 h-px bg-[var(--hairline)]" aria-hidden="true" />
@@ -5087,8 +4950,6 @@ export default function CitizenChatPage() {
               onPreviewImage={(src, name) => setLightbox({ src, name })}
             />
           )}
-
-          {view === 'log' && <AuditLogView logs={auditLogs} />}
 
           {view === 'notifications' && (
             <GmailNotificationsView
@@ -5438,14 +5299,10 @@ export default function CitizenChatPage() {
                 )}
 
                 {/* Composer (`.composer` card - slim) */}
-                <div ref={composerWrapRef} className={`mx-auto w-full max-w-[760px] shrink-0 px-4 ${!isEmptyChat ? 'pb-3' : ''}`}>
+                <div ref={composerWrapRef} className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-3">
                   <div data-tour="composer" className="composer rounded-[16px] bg-white">
-                    <div className="flex items-center gap-1.5 px-3.5 pt-2 text-[12px]">
-                      <span className="font-medium">GovGuidePH</span>
-                    </div>
-
                     {attachedFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 px-3 pt-2">
+                      <div className="flex flex-wrap gap-1.5 px-3 pt-3">
                         {attachedFiles.map((f, idx) => (
                           <span
                             key={`${f.name}-${idx}`}
@@ -5510,7 +5367,7 @@ export default function CitizenChatPage() {
                           ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat...'
                           : 'Magtanong tungkol sa serbisyo ng gobyerno o mag-upload ng ID para masuri...'
                       }
-                      className="block min-h-[38px] max-h-[160px] w-full resize-none bg-transparent px-3.5 pt-1 pb-1 text-[14px] leading-relaxed outline-none placeholder:text-[13px] placeholder:text-[var(--label-3)]"
+                      className={`block min-h-[42px] max-h-[160px] w-full resize-none bg-transparent px-3.5 pb-1 text-[14px] leading-relaxed outline-none placeholder:text-[13px] placeholder:text-[var(--label-3)] ${attachedFiles.length > 0 ? 'pt-1.5' : 'pt-3'}`}
                     />
 
                     <div className="flex items-center gap-1 px-2 pb-2 pt-0.5">

@@ -216,7 +216,25 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
     }
   }
 
-  const fb = fallbackVault || EMPTY_VAULT_DATA;
+  // Only use fallback if it represents the same citizen identity.
+  // When switching users, never leak the prior citizen's identifiers or family data.
+  const fbFn = fallbackVault?.firstName?.trim().toLowerCase() || '';
+  const fbLn = fallbackVault?.lastName?.trim().toLowerCase() || '';
+  const curFn = fn.trim().toLowerCase();
+  const curLn = ln.trim().toLowerCase();
+  const fbEmail = fallbackVault?.emailAddress?.trim().toLowerCase() || '';
+  const curEmail = (a.email || '').trim().toLowerCase();
+  const fbPhilsys = (fallbackVault?.philsysId || '').replace(/[-\s]/g, '');
+  const curPhilsys = (a.philsys_id || a.philsys_card_number || '').replace(/[-\s]/g, '');
+
+  const isSamePerson = Boolean(
+    fallbackVault &&
+      ((curPhilsys && fbPhilsys && curPhilsys === fbPhilsys) ||
+        (curEmail && fbEmail && curEmail === fbEmail) ||
+        (curFn && curLn && fbFn === curFn && fbLn === curLn))
+  );
+
+  const fb = isSamePerson && fallbackVault ? fallbackVault : EMPTY_VAULT_DATA;
 
   return {
     firstName: fn || (fb.firstName || ''),

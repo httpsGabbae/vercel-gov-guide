@@ -151,12 +151,26 @@ export function App() {
         const prev = sessionRef.current;
         const next: ExtensionSession = msg.session;
         const changedUser =
-          !prev || prev.isAuthenticated !== next.isAuthenticated || prev.userId !== next.userId;
+          !prev ||
+          prev.isAuthenticated !== next.isAuthenticated ||
+          prev.userId !== next.userId ||
+          prev.citizenId !== next.citizenId ||
+          prev.userRole !== next.userRole ||
+          prev.fullName !== next.fullName;
         setSession(next);
+        sessionRef.current = next;
         if (changedUser) {
           selectRequest(null);
           setRequests([]);
           setVault(null);
+          setEditFormData(null);
+          setAiGeneratedLetter(null);
+          setAiLetterDraft('');
+          setAiKeywords('');
+          setChatMessages([INITIAL_GREETING_MESSAGE]);
+          try {
+            saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
+          } catch {}
           routeForSession(next);
         }
       }
@@ -185,7 +199,19 @@ export function App() {
         setLoggingIn(false);
         if (res && res.success && res.session) {
           setLoginPassword('');
+          const prev = sessionRef.current;
           setSession(res.session);
+          sessionRef.current = res.session;
+          if (!prev || prev.userId !== res.session.userId) {
+            setVault(null);
+            setEditFormData(null);
+            setRequests([]);
+            selectRequest(null);
+            setChatMessages([INITIAL_GREETING_MESSAGE]);
+            try {
+              saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
+            } catch {}
+          }
           routeForSession(res.session);
         } else {
           setLoginError(res?.error || 'Unable to sign in. Ensure GovGuide PH is running.');
@@ -197,10 +223,19 @@ export function App() {
   const handleLogout = () => {
     chrome.runtime.sendMessage({ type: 'LOGOUT' }, (res) => {
       setSession(res?.session || null);
+      sessionRef.current = res?.session || null;
       setVault(null);
+      setEditFormData(null);
       setRequests([]);
       selectRequest(null);
       setIsEditing(false);
+      setAiGeneratedLetter(null);
+      setAiLetterDraft('');
+      setAiKeywords('');
+      setChatMessages([INITIAL_GREETING_MESSAGE]);
+      try {
+        saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
+      } catch {}
     });
   };
 
@@ -746,7 +781,7 @@ export function App() {
               <div className="agency-ai-card">
                 <div className="agency-ai-header">
                   <div className="agency-ai-title">
-                    <span>🤖</span> AI Notice Drafter (Keywords → Letter)
+                    AI Notice Drafter (Keywords → Letter)
                   </div>
                   <span className="agency-ai-badge">RA 11032 Grounded</span>
                 </div>
@@ -765,7 +800,7 @@ export function App() {
                       handleDraftLetter('expired ID, need 2 valid government IDs');
                     }}
                   >
-                    <span>⚠️</span> Expired / Missing ID
+                    Expired / Missing ID
                   </button>
                   <button
                     type="button"
@@ -775,7 +810,7 @@ export function App() {
                       handleDraftLetter('appointment scheduled Counter 3 Nov 10 10:00 AM biometrics');
                     }}
                   >
-                    <span>🗓️</span> Counter Biometrics
+                    Counter Biometrics
                   </button>
                   <button
                     type="button"
@@ -785,7 +820,7 @@ export function App() {
                       handleDraftLetter('unreadable PSA record, submit birth cert with clear registry number');
                     }}
                   >
-                    <span>📑</span> PSA Record Issue
+                    PSA Record Issue
                   </button>
                   <button
                     type="button"
@@ -795,7 +830,7 @@ export function App() {
                       handleDraftLetter('approved and printed, ready for pick up at counter or courier delivery');
                     }}
                   >
-                    <span>✅</span> Ready for Release
+                    Ready for Release
                   </button>
                 </div>
 
@@ -821,7 +856,7 @@ export function App() {
                     onClick={() => handleDraftLetter()}
                     disabled={!aiKeywords.trim()}
                   >
-                    Draft ✨
+                    Draft
                   </button>
                 </div>
 
@@ -829,7 +864,6 @@ export function App() {
                 {aiGeneratedLetter && (
                   <div className="official-letter-card">
                     <div className="official-letter-header">
-                      <span className="letterhead-flag">🇵🇭</span>
                       <div className="letterhead-title">{aiGeneratedLetter.agency}</div>
                       <div className="letterhead-sub">REPUBLIC OF THE PHILIPPINES · CITIZEN&apos;S CHARTER NOTICE</div>
                     </div>
@@ -870,14 +904,14 @@ export function App() {
                         onClick={handleSendAiLetter}
                         disabled={isUpdating}
                       >
-                        {isUpdating ? 'Sending...' : '📨 Send Email Notice to Citizen'}
+                        {isUpdating ? 'Sending...' : 'Send Email Notice'}
                       </button>
                       <button
                         type="button"
                         className="btn-edit-letter"
                         onClick={() => setAiIsEditingLetter(!aiIsEditingLetter)}
                       >
-                        {aiIsEditingLetter ? '💾 Done' : '✏️ Edit'}
+                        {aiIsEditingLetter ? 'Done' : 'Edit'}
                       </button>
                       <button
                         type="button"
@@ -887,7 +921,7 @@ export function App() {
                           setAiLetterDraft('');
                         }}
                       >
-                        🔄 Clear
+                        Clear
                       </button>
                     </div>
                   </div>
@@ -1022,16 +1056,23 @@ export function App() {
                     aria-expanded={isProfileExpanded}
                   >
                     <span>{isProfileExpanded ? 'Less' : 'More'}</span>
-                    <span
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       style={{
-                        fontSize: 9,
                         display: 'inline-block',
                         transition: 'transform 0.2s ease',
                         transform: isProfileExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
                     >
-                      ▼
-                    </span>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -1201,8 +1242,11 @@ export function App() {
                     onClick={handleClearCitizenChat}
                     className="btn-clear-chat"
                     title="Clear chat history"
+                    aria-label="Clear chat"
                   >
-                    🗑️
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -1212,12 +1256,15 @@ export function App() {
                 {chatMessages.map((msg) => (
                   <div key={msg.id} className={`mini-chat-bubble ${msg.role}`}>
                     <div className="mini-chat-content">
-                      {msg.content || (isChatLoading && msg.role === 'assistant' ? 'Nagiisip...' : '')}
+                      {msg.content || (isChatLoading && msg.role === 'assistant' ? 'Thinking...' : '')}
                     </div>
 
                     {msg.guardrailBlocked && (
                       <div className="mini-guardrail-banner">
-                        <span>🛡️</span> Guardrail Active: {msg.guardrailCategory || 'RA 11032 Anti-Fixer Policy'}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                        <span>Guardrail Active: {msg.guardrailCategory || 'RA 11032 Anti-Fixer Policy'}</span>
                       </div>
                     )}
 
@@ -1225,7 +1272,7 @@ export function App() {
                       <div className="mini-chat-sources">
                         {msg.sources.map((s, idx) => (
                           <span key={idx} className="mini-source-chip" title={`${s.service} · ${s.section || ''}`}>
-                            📖 {s.agency}
+                            {s.agency}
                           </span>
                         ))}
                       </div>
@@ -1240,7 +1287,7 @@ export function App() {
                 <input
                   type="text"
                   className="mini-chat-input"
-                  placeholder="Tanong sa requirements, valid IDs, fees (e.g. 'DFA passport')..."
+                  placeholder="Ask about requirements, IDs, fees (e.g. 'DFA passport')..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1256,8 +1303,16 @@ export function App() {
                   onClick={() => handleSendChatMessage()}
                   disabled={isChatLoading || !chatInput.trim()}
                   className="btn-mini-send"
+                  aria-label="Send message"
                 >
-                  {isChatLoading ? '...' : 'Send ➤'}
+                  {isChatLoading ? (
+                    <span className="spinner spinner-xs" />
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>

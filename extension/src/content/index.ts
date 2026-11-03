@@ -171,6 +171,32 @@ function readWebAuthTokens(): { accessToken: string; refreshToken: string } | nu
 }
 
 let lastWebAuthToken: string | null | undefined;
+let lastPushedApplicantJson: string | null = null;
+let lastPushedCitizenId: string | null = null;
+
+function checkAndPushActiveApplicant() {
+  try {
+    const rawStored = localStorage.getItem('govguide_active_applicant');
+    const activeId = localStorage.getItem('govguide_active_citizen_id');
+    if (rawStored && (rawStored !== lastPushedApplicantJson || activeId !== lastPushedCitizenId)) {
+      lastPushedApplicantJson = rawStored;
+      lastPushedCitizenId = activeId;
+      const parsed = JSON.parse(rawStored);
+      if (parsed && typeof parsed === 'object') {
+        chrome.runtime.sendMessage({
+          type: 'PUSH_VAULT_FROM_WEB',
+          payload: {
+            applicant: parsed,
+            citizenId: activeId || parsed.id || 'active',
+            apiBaseUrl: window.location.origin,
+          },
+        });
+      }
+    }
+  } catch {
+    // Safe ignore
+  }
+}
 
 function pushWebAuthIfChanged() {
   const tokens = readWebAuthTokens();
@@ -194,12 +220,22 @@ function pushWebAuthIfChanged() {
 
 function startWebAuthBridge() {
   pushWebAuthIfChanged();
-  window.addEventListener('storage', pushWebAuthIfChanged);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') pushWebAuthIfChanged();
+  checkAndPushActiveApplicant();
+  window.addEventListener('storage', () => {
+    pushWebAuthIfChanged();
+    checkAndPushActiveApplicant();
   });
-  // Same-tab sign-in/out does not fire `storage`, so poll lightly
-  setInterval(pushWebAuthIfChanged, 3000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      pushWebAuthIfChanged();
+      checkAndPushActiveApplicant();
+    }
+  });
+  // Same-tab profile or auth switches poll lightly
+  setInterval(() => {
+    pushWebAuthIfChanged();
+    checkAndPushActiveApplicant();
+  }, 2500);
 }
 
 function runDetection(vault: CitizenVaultData): DetectionSummary {

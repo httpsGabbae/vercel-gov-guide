@@ -17,6 +17,7 @@ export interface ProposeDraftResult {
   missingFields: MissingFieldPrompt[];
   confidenceScore: number;
   proactiveWarnings: string[];
+  suggestedFields?: string[];
 }
 
 /**
@@ -318,6 +319,10 @@ Output strict JSON object only:`;
   const confidenceScore =
     requiredFields.length > 0 ? Math.round((completedCount / requiredFields.length) * 100) : 100;
 
+  const suggestedFields = Object.keys(draftData).filter(
+    (k) => draftData[k] !== undefined && draftData[k] !== null && draftData[k] !== '',
+  );
+
   return {
     serviceCode,
     isComplete,
@@ -325,5 +330,6 @@ Output strict JSON object only:`;
     missingFields,
     confidenceScore,
     proactiveWarnings,
+    suggestedFields,
   };
 }

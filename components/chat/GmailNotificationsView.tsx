@@ -184,7 +184,7 @@ export function GmailNotificationsView({
         aiPrompt,
       };
     });
-  }, [agencyMilestones]);
+  }, [agencyMilestones, readNotificationIds]);
 
   // UI States
   const [emails, setEmails] = useState<EmailNotificationItem[]>(initialEmails);

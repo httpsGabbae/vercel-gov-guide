@@ -147,47 +147,47 @@ function p(e, t) {
 		let e = g.split(/\s+/);
 		e.length === 1 ? f = e[0] : e.length === 2 ? (f = e[0], m = e[1]) : e.length >= 3 && (f = e[0], p = e.slice(1, -1).join(" "), m = e[e.length - 1]);
 	}
-	let _ = t || s;
+	let _ = t?.firstName?.trim().toLowerCase() || "", v = t?.lastName?.trim().toLowerCase() || "", y = n.trim().toLowerCase(), b = i.trim().toLowerCase(), x = t?.emailAddress?.trim().toLowerCase() || "", S = (e.email || "").trim().toLowerCase(), C = (t?.philsysId || "").replace(/[-\s]/g, ""), w = (e.philsys_id || e.philsys_card_number || "").replace(/[-\s]/g, ""), T = t && (w && C && w === C || S && x && S === x || y && b && _ === y && v === b) && t ? t : s;
 	return {
-		firstName: n || _.firstName || "",
-		middleName: r || _.middleName || "",
-		lastName: i || _.lastName || "",
-		suffix: a || _.suffix || "",
+		firstName: n || T.firstName || "",
+		middleName: r || T.middleName || "",
+		lastName: i || T.lastName || "",
+		suffix: a || T.suffix || "",
 		gender: e.gender?.toUpperCase() === "FEMALE" ? "FEMALE" : e.gender?.toUpperCase() === "OTHER" ? "OTHER" : "MALE",
-		dateOfBirth: e.birth_date || e.date_of_birth || _.dateOfBirth || "",
-		placeOfBirth: e.place_of_birth || (e.city ? `${e.city}, Philippines` : _.placeOfBirth || ""),
-		civilStatus: e.civil_status?.toUpperCase() || _.civilStatus || "SINGLE",
-		nationality: e.nationality || _.nationality || "FILIPINO",
+		dateOfBirth: e.birth_date || e.date_of_birth || T.dateOfBirth || "",
+		placeOfBirth: e.place_of_birth || (e.city ? `${e.city}, Philippines` : T.placeOfBirth || ""),
+		civilStatus: e.civil_status?.toUpperCase() || T.civilStatus || "SINGLE",
+		nationality: e.nationality || T.nationality || "FILIPINO",
 		fatherFullName: d || [
 			o,
 			c,
 			l,
 			u
-		].filter(Boolean).join(" ") || _.fatherFullName || "",
-		fatherFirstName: o || _.fatherFirstName || "",
-		fatherMiddleName: c || _.fatherMiddleName || "",
-		fatherLastName: l || _.fatherLastName || "",
-		fatherSuffix: u || _.fatherSuffix || "",
-		motherMaidenFirstName: f || _.motherMaidenFirstName || "",
-		motherMaidenMiddleName: p || _.motherMaidenMiddleName || "",
-		motherMaidenLastName: m || _.motherMaidenLastName || "",
-		motherMaidenSuffix: h || _.motherMaidenSuffix || "",
-		mobileNumber: e.phone || e.mobile || e.mobile_number || e.contact_number || _.mobileNumber || "",
-		emailAddress: e.email || _.emailAddress || "",
-		landline: e.landline || _.landline || "",
-		region: e.region || _.region || "",
-		province: e.province || _.province || "",
-		cityMunicipality: e.city || _.cityMunicipality || "",
-		barangay: e.barangay || _.barangay || "",
-		streetHouseNumber: e.street_address || e.residential_address || _.streetHouseNumber || "",
-		zipCode: e.zip_code || _.zipCode || "",
-		philsysId: e.philsys_id || e.philsys_card_number || _.philsysId || "",
-		tin: e.tin || e.tin_number || _.tin || "",
-		sssNumber: e.sss_number || _.sssNumber || "",
-		philhealthNumber: e.philhealth_number || _.philhealthNumber || "",
-		pagibigMid: e.pagibig_number || e.pagibigMid || _.pagibigMid || "",
-		passportNumber: e.passport_number || e.passportNumber || _.passportNumber || "",
-		relationshipToOwner: e.relationship || _.relationshipToOwner || "Self"
+		].filter(Boolean).join(" ") || T.fatherFullName || "",
+		fatherFirstName: o || T.fatherFirstName || "",
+		fatherMiddleName: c || T.fatherMiddleName || "",
+		fatherLastName: l || T.fatherLastName || "",
+		fatherSuffix: u || T.fatherSuffix || "",
+		motherMaidenFirstName: f || T.motherMaidenFirstName || "",
+		motherMaidenMiddleName: p || T.motherMaidenMiddleName || "",
+		motherMaidenLastName: m || T.motherMaidenLastName || "",
+		motherMaidenSuffix: h || T.motherMaidenSuffix || "",
+		mobileNumber: e.phone || e.mobile || e.mobile_number || e.contact_number || T.mobileNumber || "",
+		emailAddress: e.email || T.emailAddress || "",
+		landline: e.landline || T.landline || "",
+		region: e.region || T.region || "",
+		province: e.province || T.province || "",
+		cityMunicipality: e.city || T.cityMunicipality || "",
+		barangay: e.barangay || T.barangay || "",
+		streetHouseNumber: e.street_address || e.residential_address || T.streetHouseNumber || "",
+		zipCode: e.zip_code || T.zipCode || "",
+		philsysId: e.philsys_id || e.philsys_card_number || T.philsysId || "",
+		tin: e.tin || e.tin_number || T.tin || "",
+		sssNumber: e.sss_number || T.sssNumber || "",
+		philhealthNumber: e.philhealth_number || T.philhealthNumber || "",
+		pagibigMid: e.pagibig_number || e.pagibigMid || T.pagibigMid || "",
+		passportNumber: e.passport_number || e.passportNumber || T.passportNumber || "",
+		relationshipToOwner: e.relationship || T.relationshipToOwner || "Self"
 	};
 }
 async function m(e, t) {
@@ -300,11 +300,13 @@ async function v(e, t, n) {
 	return g(r), r;
 }
 async function y() {
+	await f(s);
 	let e = await u({
 		isAuthenticated: !1,
 		authSource: void 0,
 		userRole: "guest",
 		userId: void 0,
+		citizenId: "active",
 		email: void 0,
 		fullName: void 0,
 		officerName: void 0,
@@ -314,7 +316,14 @@ async function y() {
 		refreshToken: void 0,
 		expiresAt: void 0
 	});
-	return g(e), e;
+	g(e);
+	try {
+		chrome.runtime.sendMessage({
+			type: "VAULT_UPDATED",
+			vault: s
+		});
+	} catch {}
+	return e;
 }
 async function b(e) {
 	if (!e.refreshToken) return null;
@@ -350,7 +359,7 @@ async function x(e, t = {}) {
 var S = null;
 async function C(e) {
 	let t = await l();
-	if (e.signedOut || !e.accessToken) return t.isAuthenticated && t.authSource === "web" && t.accessToken ? { session: _(await y()) } : { session: _(t) };
+	if (e.signedOut || !e.accessToken) return t.isAuthenticated && t.authSource === "web" ? { session: _(await y()) } : { session: _(t) };
 	if (t.isAuthenticated && t.accessToken === e.accessToken || S === e.accessToken) return { session: _(t) };
 	S = e.accessToken;
 	try {
@@ -392,13 +401,15 @@ async function w(e) {
 		case "PUSH_VAULT_FROM_WEB": {
 			let { applicant: t, citizenId: n, apiBaseUrl: r } = e.payload, i = p(t, await d());
 			await f(i);
-			let a = n || t?.id || "active", o = await l(), s = !!t?.display_name?.trim() || !!t?.first_name?.trim() || !!t?.email?.trim() || a !== "active" && a !== "e1000000-0000-4000-8000-000000000003", c = {
+			let a = n || t?.id || "active", o = await l(), s = !!t?.display_name?.trim() || !!t?.first_name?.trim() || !!t?.email?.trim() || a !== "active" && a !== "e1000000-0000-4000-8000-000000000003", c = t?.role === "agency_admin" ? "agency_admin" : "citizen", m = t?.display_name || [t?.first_name, t?.last_name].filter(Boolean).join(" ") || "Citizen Session", h = {
 				citizenId: a,
 				lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
 			};
-			r && (c.apiBaseUrl = r), !o.isAuthenticated && s && (c.isAuthenticated = !0, c.authSource = "web", c.userRole = "citizen", c.userId = a, c.email = t?.email || "citizen@govguide.ph", c.fullName = t?.display_name || [t?.first_name, t?.last_name].filter(Boolean).join(" ") || "Citizen Session");
-			let m = await u(c);
-			!o.isAuthenticated && m.isAuthenticated && g(m);
+			r && (h.apiBaseUrl = r);
+			let _ = o.userId !== a || o.citizenId !== a || o.userRole !== c || s && o.fullName !== m;
+			(s || _) && (h.isAuthenticated = !0, h.authSource = "web", h.userRole = c, h.userId = a, h.email = t?.email || o.email || "citizen@govguide.ph", h.fullName = m);
+			let v = await u(h);
+			(!o.isAuthenticated && v.isAuthenticated || _) && g(v);
 			try {
 				chrome.runtime.sendMessage({
 					type: "VAULT_UPDATED",
@@ -446,10 +457,10 @@ async function w(e) {
 			return !n.ok || !r.success ? {
 				success: !1,
 				error: r.error || "Invalid email or password."
-			} : {
+			} : (t.userId && t.userId !== r.user.userId && await f(s), {
 				success: !0,
 				session: _(await v(r.user, r.tokens, "extension"))
-			};
+			});
 		}
 		case "LOGOUT": return {
 			success: !0,

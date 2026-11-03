@@ -54,7 +54,7 @@ export function evaluateClientGuardrail(query: string): {
       blocked: true,
       category: 'ILLEGAL_FIXER_FORGERY',
       replyText:
-        '⚠️ **BABALA: ANTI-FIXER & INTEGRITY POLICY (RA 11032)**\n\n' +
+        '**BABALA: ANTI-FIXER & INTEGRITY POLICY (RA 11032)**\n\n' +
         'Mariing ipinagbabawal ng GovGuide PH at ng pamahalaan ang paggamit ng fixer, pekeng dokumento, o pagbabayad para sa "palakad" o pag-bypass sa opisyal na pila.\n\n' +
         'Ayon sa **Republic Act No. 11032** (Ease of Doing Business and Efficient Government Service Delivery Act of 2018), ang pakikipagtransaksyon sa fixer ay may kaparusahang pagkakakulong at mabibigat na multa.\n\n' +
         '**Ligtas na Aksyon:**\n' +
@@ -73,7 +73,7 @@ export function evaluateClientGuardrail(query: string): {
       blocked: true,
       category: 'PROMPT_INJECTION',
       replyText:
-        '🛡️ **SECURITY GUARDRAIL TRIGGERED**\n\n' +
+        '**SECURITY GUARDRAIL TRIGGERED**\n\n' +
         "Hindi pinahihintulutan ang tangkang pag-override sa system instructions o guardrails ng GovGuide PH. Gumagana ang AI na ito alinsunod lamang sa mga opisyal na Citizen's Charter ng Republika ng Pilipinas.",
     };
   }
@@ -87,6 +87,30 @@ export function evaluateClientGuardrail(query: string): {
  */
 export function getOfflineCharterAnswer(query: string): { content: string; sources: ChatMessageSource[] } {
   const q = query.toLowerCase();
+
+  if (
+    /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|sino\s+ka|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|hello|hi|hey|kumusta|kamusta)\b/i.test(
+      q
+    )
+  ) {
+    return {
+      content:
+        'Magandang araw! Ako si **GovGuide PH**, ang iyong AI Citizen Pre-Flight Assistant para sa mga serbisyo ng gobyerno ng Pilipinas.\n\n' +
+        'Ang layunin ko ay tulungan kang maging **Counter-Ready** at maiwasan ang "balik-pila" sa pamamagitan ng pag-verify ng iyong mga dokumento at pagsusuri ng mga opisyal na requirements para sa:\n' +
+        '• **NBI Clearance** (New, Renewal, First-Time Jobseeker RA 11261)\n' +
+        '• **PSA Documents** (Birth Certificate, Marriage, CENOMAR)\n' +
+        '• **PhilHealth** (PMRF, MDR, Dependent Registration)\n' +
+        '• **DFA Passport** (Appointment & Renewal requirements)\n\n' +
+        'Ano pong serbisyo ang maari kong maitulong sa iyo ngayon?',
+      sources: [
+        {
+          agency: 'GovGuide PH Civic Platform',
+          service: 'Citizen Pre-Flight Assistant',
+          section: 'Republic Act No. 11032 Anti-Red Tape Grounding',
+        },
+      ],
+    };
+  }
 
   if (q.includes('passport') || q.includes('dfa')) {
     return {

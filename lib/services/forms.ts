@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ApplicantProfile } from './charter-sources';
 
 export type FormFieldType = 'text' | 'select' | 'date' | 'radio' | 'checkbox' | 'number';
 
@@ -13,6 +14,7 @@ export interface FormFieldDefinition {
   helperTextFil?: string;
   helperTextEn?: string;
   section: string;
+  dependsOn?: { field: string; value: unknown };
 }
 
 export interface ServiceFormConfig {
@@ -21,7 +23,36 @@ export interface ServiceFormConfig {
   titleEn: string;
   sections: string[];
   fields: FormFieldDefinition[];
-  schema: z.ZodObject<z.ZodRawShape>;
+  schema: z.ZodTypeAny;
+}
+
+/**
+ * Validates real calendar date (YYYY-MM-DD), ensures year is between 1900 and current year,
+ * and rejects dates in the future.
+ */
+export function isValidPhilippineDate(dateStr: string): boolean {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [yearStr, monthStr, dayStr] = dateStr.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const day = parseInt(dayStr, 10);
+  if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return false;
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (date > today) return false;
+  return true;
+}
+
+/**
+ * Validates standard Philippine mobile numbers:
+ * Starts with '09' (11 digits) or '+639' (13 digits).
+ */
+export function isValidPhilippineMobile(phoneStr: string): boolean {
+  if (typeof phoneStr !== 'string') return false;
+  const cleaned = phoneStr.replace(/[\s-]/g, '');
+  return /^(09\d{9}|\+639\d{9})$/.test(cleaned);
 }
 
 // -------------------------------------------------------------
@@ -32,18 +63,34 @@ export const nbiClearanceSchema = z.object({
     required_error: 'Pumili kung Bago o Renewal.',
   }),
   isFirstTimeJobseeker: z.boolean().default(false),
-  firstName: z.string().min(1, 'Kailangan ang Pangalan (First Name).'),
-  middleName: z.string().default(''),
-  lastName: z.string().min(1, 'Kailangan ang Apelyido (Last Name).'),
-  suffix: z.string().optional().default(''),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD'),
+  firstName: z
+    .string()
+    .min(1, 'Kailangan ang Pangalan (First Name).')
+    .max(60, 'Masyadong mahaba ang pangalan (max 60).'),
+  middleName: z.string().max(60).default(''),
+  lastName: z
+    .string()
+    .min(1, 'Kailangan ang Apelyido (Last Name).')
+    .max(60, 'Masyadong mahaba ang apelyido (max 60).'),
+  suffix: z.string().max(10).optional().default(''),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
+    .refine(isValidPhilippineDate, {
+      message: 'Wastong petsa ng kapanganakan ang kailangan (hindi maaaring nasa hinaharap o bago ang 1900).',
+    }),
   gender: z.enum(['MALE', 'FEMALE'], { required_error: 'Pumili ng Kasarian.' }),
   civilStatus: z.enum(['SINGLE', 'MARRIED', 'WIDOWED', 'SEPARATED']),
-  mobileNumber: z.string().min(10, 'Ilagay ang 11-digit mobile number (e.g., 09171234567).'),
-  email: z.string().email('Wastong email address ang kailangan.'),
-  presentAddress: z.string().min(5, 'Ilagay ang kasalukuyang tirahan.'),
+  mobileNumber: z
+    .string()
+    .min(10, 'Ilagay ang 11-digit mobile number (e.g., 09171234567).')
+    .refine(isValidPhilippineMobile, {
+      message: 'Wastong 11-digit Philippine mobile number ang kailangan (nagsisimula sa 09 o +639).',
+    }),
+  email: z.string().email('Wastong email address ang kailangan.').max(100),
+  presentAddress: z.string().min(5, 'Ilagay ang kasalukuyang tirahan.').max(200),
   purpose: z.enum(['LOCAL_EMPLOYMENT', 'TRAVEL_ABROAD', 'VISA', 'OTHER']),
-  previousNbiId: z.string().optional().default(''),
+  previousNbiId: z.string().max(30).optional().default(''),
 });
 
 export const NBI_CLEARANCE_FORM: ServiceFormConfig = {
@@ -199,25 +246,58 @@ export const NBI_CLEARANCE_FORM: ServiceFormConfig = {
 // -------------------------------------------------------------
 // 2. PSA Birth Certificate Form Configuration & Zod Schema
 // -------------------------------------------------------------
-export const psaBirthCertSchema = z.object({
-  requesterType: z.enum(
-    ['OWNER', 'PARENT', 'SPOUSE', 'DIRECT_DESCENDANT', 'AUTHORIZED_REPRESENTATIVE'],
-    { required_error: 'Pumili ng relasyon sa may-ari ng dokumento.' },
-  ),
-  numberOfCopies: z.coerce.number().min(1).max(10).default(1),
-  documentOwnerFirstName: z.string().min(1, 'Pangalan ng May-ari ng Dokumento.'),
-  documentOwnerMiddleName: z.string().default(''),
-  documentOwnerLastName: z.string().min(1, 'Apelyido ng May-ari ng Dokumento.'),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD'),
-  placeOfBirthCity: z.string().min(1, 'Lungsod/Munisipyo kung saan ipinanganak.'),
-  placeOfBirthProvince: z.string().min(1, 'Lalawigan/Probinsya.'),
-  fatherFirstName: z.string().min(1, 'Pangalan ng Ama.'),
-  fatherLastName: z.string().min(1, 'Apelyido ng Ama.'),
-  motherMaidenFirstName: z.string().min(1, 'Pangalan ng Ina.'),
-  motherMaidenLastName: z.string().min(1, 'Dalagang Apelyido ng Ina (Maiden Last Name).'),
-  deliveryMode: z.enum(['CRS_OUTLET', 'DOORSTEP_DELIVERY']),
-  deliveryAddress: z.string().optional().default(''),
-});
+export const psaBirthCertSchema = z
+  .object({
+    requesterType: z.enum(
+      ['OWNER', 'PARENT', 'SPOUSE', 'DIRECT_DESCENDANT', 'AUTHORIZED_REPRESENTATIVE'],
+      { required_error: 'Pumili ng relasyon sa may-ari ng dokumento.' },
+    ),
+    numberOfCopies: z.coerce
+      .number()
+      .min(1, 'Minimum 1 kopya ang kailangan.')
+      .max(10, 'Maximum 10 kopya lamang bawat transaksyon.')
+      .default(1),
+    documentOwnerFirstName: z
+      .string()
+      .min(1, 'Pangalan ng May-ari ng Dokumento.')
+      .max(60, 'Masyadong mahaba ang pangalan (max 60).'),
+    documentOwnerMiddleName: z.string().max(60).default(''),
+    documentOwnerLastName: z
+      .string()
+      .min(1, 'Apelyido ng May-ari ng Dokumento.')
+      .max(60, 'Masyadong mahaba ang apelyido (max 60).'),
+    dateOfBirth: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
+      .refine(isValidPhilippineDate, {
+        message: 'Wastong petsa ng kapanganakan ang kailangan (hindi maaaring nasa hinaharap o bago ang 1900).',
+      }),
+    placeOfBirthCity: z
+      .string()
+      .min(1, 'Lungsod/Munisipyo kung saan ipinanganak.')
+      .max(80),
+    placeOfBirthProvince: z.string().min(1, 'Lalawigan/Probinsya.').max(80),
+    fatherFirstName: z.string().min(1, 'Pangalan ng Ama.').max(60),
+    fatherLastName: z.string().min(1, 'Apelyido ng Ama.').max(60),
+    motherMaidenFirstName: z.string().min(1, 'Pangalan ng Ina.').max(60),
+    motherMaidenLastName: z
+      .string()
+      .min(1, 'Dalagang Apelyido ng Ina (Maiden Last Name).')
+      .max(60),
+    deliveryMode: z.enum(['CRS_OUTLET', 'DOORSTEP_DELIVERY']),
+    deliveryAddress: z.string().max(200).optional().default(''),
+  })
+  .superRefine((data, ctx) => {
+    if (data.deliveryMode === 'DOORSTEP_DELIVERY') {
+      if (!data.deliveryAddress || data.deliveryAddress.trim().length < 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryAddress'],
+          message: 'Kailangan ang kumpletong delivery address para sa Doorstep Delivery (bahay o opisina).',
+        });
+      }
+    }
+  });
 
 export const PSA_BIRTH_CERT_FORM: ServiceFormConfig = {
   serviceCode: 'PSA_BIRTH_CERT',
@@ -358,28 +438,63 @@ export const PSA_BIRTH_CERT_FORM: ServiceFormConfig = {
 // -------------------------------------------------------------
 // 3. PhilHealth Registration Form Configuration & Zod Schema
 // -------------------------------------------------------------
-export const philHealthRegistrationSchema = z.object({
-  membershipCategory: z.enum(
-    [
-      'DIRECT_EMPLOYED',
-      'DIRECT_SELF_EMPLOYED',
-      'DIRECT_OFW',
-      'INDIRECT_SENIOR',
-      'INDIRECT_INDIGENT',
-    ],
-    { required_error: 'Pumili ng kategorya ng membership.' },
-  ),
-  firstName: z.string().min(1, 'Kailangan ang Pangalan.'),
-  middleName: z.string().default(''),
-  lastName: z.string().min(1, 'Kailangan ang Apelyido.'),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD'),
-  civilStatus: z.enum(['SINGLE', 'MARRIED', 'WIDOWED', 'SEPARATED']),
-  declaredMonthlyIncome: z.coerce.number().min(0).default(10000),
-  hasDependents: z.boolean().default(false),
-  dependentNames: z.string().optional().default(''),
-  contactNumber: z.string().min(10, 'Ilagay ang wastong contact number.'),
-  permanentAddress: z.string().min(5, 'Ilagay ang permanenteng tirahan.'),
-});
+export const philHealthRegistrationSchema = z
+  .object({
+    membershipCategory: z.enum(
+      [
+        'DIRECT_EMPLOYED',
+        'DIRECT_SELF_EMPLOYED',
+        'DIRECT_OFW',
+        'INDIRECT_SENIOR',
+        'INDIRECT_INDIGENT',
+      ],
+      { required_error: 'Pumili ng kategorya ng membership.' },
+    ),
+    firstName: z
+      .string()
+      .min(1, 'Kailangan ang Pangalan.')
+      .max(60, 'Masyadong mahaba ang pangalan (max 60).'),
+    middleName: z.string().max(60).default(''),
+    lastName: z
+      .string()
+      .min(1, 'Kailangan ang Apelyido.')
+      .max(60, 'Masyadong mahaba ang apelyido (max 60).'),
+    dateOfBirth: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
+      .refine(isValidPhilippineDate, {
+        message: 'Wastong petsa ng kapanganakan ang kailangan (hindi maaaring nasa hinaharap o bago ang 1900).',
+      }),
+    civilStatus: z.enum(['SINGLE', 'MARRIED', 'WIDOWED', 'SEPARATED']),
+    declaredMonthlyIncome: z.coerce
+      .number()
+      .min(0, 'Hindi maaaring negatibo ang kita.')
+      .max(5000000, 'Masyadong mataas ang buwanang kita.')
+      .default(10000),
+    hasDependents: z.boolean().default(false),
+    dependentNames: z.string().max(300).optional().default(''),
+    contactNumber: z
+      .string()
+      .min(10, 'Ilagay ang wastong contact number.')
+      .refine(isValidPhilippineMobile, {
+        message: 'Wastong 11-digit Philippine mobile number ang kailangan (nagsisimula sa 09 o +639).',
+      }),
+    permanentAddress: z
+      .string()
+      .min(5, 'Ilagay ang permanenteng tirahan.')
+      .max(200),
+  })
+  .superRefine((data, ctx) => {
+    if (data.hasDependents) {
+      if (!data.dependentNames || data.dependentNames.trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dependentNames'],
+          message: 'Pakisulat ang pangalan ng mga kuwalipikadong dependent (asawa o mga menor-de-edad na anak).',
+        });
+      }
+    }
+  });
 
 export const PHILHEALTH_REGISTRATION_FORM: ServiceFormConfig = {
   serviceCode: 'PHILHEALTH_REGISTRATION',
@@ -501,4 +616,97 @@ export const SERVICE_FORMS: Record<string, ServiceFormConfig> = {
 export function getServiceFormConfig(serviceCode: string): ServiceFormConfig | null {
   const normalized = serviceCode.toUpperCase().trim();
   return SERVICE_FORMS[normalized] || null;
+}
+
+/**
+ * Maps an existing citizen profile (ApplicantProfile) to default form field values
+ * for the designated service without silent overwrite.
+ */
+export function mapApplicantProfileToForm(
+  serviceCode: string,
+  profile: Partial<ApplicantProfile>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const norm = serviceCode.toUpperCase();
+
+  const nameParts = (profile.display_name || '').trim().split(/\s+/).filter(Boolean);
+  const firstName =
+    profile.first_name ||
+    (nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0] || '');
+  const lastName =
+    profile.last_name ||
+    (nameParts.length > 1 ? nameParts[nameParts.length - 1] : '');
+  const middleName = profile.middle_name || '';
+  const suffix = profile.suffix || '';
+  const dob = profile.birth_date || '';
+  const phone = profile.contact_number || profile.phone || '';
+  const email = profile.email || '';
+  const address =
+    profile.residential_address || profile.street_address
+      ? [
+          profile.residential_address || profile.street_address,
+          profile.barangay,
+          profile.city,
+          profile.province,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : [profile.barangay, profile.city, profile.province].filter(Boolean).join(', ');
+
+  if (norm === 'NBI_CLEARANCE') {
+    if (firstName) result.firstName = firstName.toUpperCase();
+    if (lastName) result.lastName = lastName.toUpperCase();
+    if (middleName) result.middleName = middleName.toUpperCase();
+    if (suffix) result.suffix = suffix.toUpperCase();
+    if (dob) result.dateOfBirth = dob;
+    if (phone) result.mobileNumber = phone;
+    if (email) result.email = email;
+    if (address) result.presentAddress = address;
+    if (profile.civil_status) {
+      const cs = profile.civil_status.toUpperCase();
+      if (['SINGLE', 'MARRIED', 'WIDOWED', 'SEPARATED'].includes(cs)) {
+        result.civilStatus = cs;
+      }
+    }
+    if (profile.role === 'jobseeker') {
+      result.isFirstTimeJobseeker = true;
+    }
+  } else if (norm === 'PSA_BIRTH_CERT') {
+    result.requesterType = 'OWNER';
+    result.numberOfCopies = 1;
+    result.deliveryMode = 'DOORSTEP_DELIVERY';
+    if (firstName) result.documentOwnerFirstName = firstName.toUpperCase();
+    if (lastName) result.documentOwnerLastName = lastName.toUpperCase();
+    if (middleName) result.documentOwnerMiddleName = middleName.toUpperCase();
+    if (dob) result.dateOfBirth = dob;
+    if (profile.place_of_birth || profile.city) {
+      result.placeOfBirthCity = (profile.place_of_birth || profile.city || '').toUpperCase();
+    }
+    if (profile.province) result.placeOfBirthProvince = profile.province.toUpperCase();
+    if (profile.father_first_name) result.fatherFirstName = profile.father_first_name.toUpperCase();
+    if (profile.father_last_name) result.fatherLastName = profile.father_last_name.toUpperCase();
+    if (profile.mother_first_name) {
+      result.motherMaidenFirstName = profile.mother_first_name.toUpperCase();
+    }
+    if (profile.mother_last_name) {
+      result.motherMaidenLastName = profile.mother_last_name.toUpperCase();
+    }
+    if (address) result.deliveryAddress = address;
+  } else if (norm === 'PHILHEALTH_REGISTRATION') {
+    result.membershipCategory = 'DIRECT_EMPLOYED';
+    if (firstName) result.firstName = firstName.toUpperCase();
+    if (lastName) result.lastName = lastName.toUpperCase();
+    if (middleName) result.middleName = middleName.toUpperCase();
+    if (dob) result.dateOfBirth = dob;
+    if (phone) result.contactNumber = phone;
+    if (address) result.permanentAddress = address;
+    if (profile.civil_status) {
+      const cs = profile.civil_status.toUpperCase();
+      if (['SINGLE', 'MARRIED', 'WIDOWED', 'SEPARATED'].includes(cs)) {
+        result.civilStatus = cs;
+      }
+    }
+  }
+
+  return result;
 }

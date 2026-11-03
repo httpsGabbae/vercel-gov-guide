@@ -4,7 +4,7 @@
  * Notifications & Agency API Dispatch
  */
 
-import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault } from '../lib/vault';
+import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault, EMPTY_VAULT_DATA } from '../lib/vault';
 import type { ExtensionMessage, ExtensionSession, UserRole } from '../types';
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -154,11 +154,13 @@ async function applyAuth(
 }
 
 async function clearAuth(): Promise<ExtensionSession> {
+  await saveLocalVault(EMPTY_VAULT_DATA);
   const session = await saveSession({
     isAuthenticated: false,
     authSource: undefined,
     userRole: 'guest',
     userId: undefined,
+    citizenId: 'active',
     email: undefined,
     fullName: undefined,
     officerName: undefined,
@@ -169,6 +171,9 @@ async function clearAuth(): Promise<ExtensionSession> {
     expiresAt: undefined,
   });
   broadcastSession(session);
+  try {
+    chrome.runtime.sendMessage({ type: 'VAULT_UPDATED', vault: EMPTY_VAULT_DATA });
+  } catch {}
   return session;
 }
 
@@ -229,8 +234,8 @@ async function syncWebAuth(payload: { accessToken?: string; refreshToken?: strin
   const session = await getSession();
 
   if (payload.signedOut || !payload.accessToken) {
-    // Web chat signed out: mirror sign-out only for sessions that came from the web with an access token
-    if (session.isAuthenticated && session.authSource === 'web' && session.accessToken) {
+    // Web chat signed out: mirror sign-out for any session sourced from the web
+    if (session.isAuthenticated && session.authSource === 'web') {
       return { session: publicSession(await clearAuth()) };
     }
     return { session: publicSession(session) };
@@ -311,6 +316,12 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
         Boolean(applicant?.email?.trim()) ||
         (effectiveId !== 'active' && effectiveId !== 'e1000000-0000-4000-8000-000000000003');
 
+      const targetRole = applicant?.role === 'agency_admin' ? 'agency_admin' : 'citizen';
+      const nextFullName =
+        applicant?.display_name ||
+        [applicant?.first_name, applicant?.last_name].filter(Boolean).join(' ') ||
+        'Citizen Session';
+
       const sessionPatch: Partial<ExtensionSession> = {
         citizenId: effectiveId,
         lastSyncedAt: new Date().toISOString(),
@@ -319,22 +330,27 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
         sessionPatch.apiBaseUrl = apiBaseUrl;
       }
 
-      // If the user is actively using a GovGuide Chat session and the extension is not signed in yet,
-      // automatically sync their citizen session into the extension.
-      if (!existingSession.isAuthenticated && hasApplicantIdentity) {
+      // Check if the citizen identity or role changed from the web session
+      const userChanged =
+        existingSession.userId !== effectiveId ||
+        existingSession.citizenId !== effectiveId ||
+        existingSession.userRole !== targetRole ||
+        (hasApplicantIdentity && existingSession.fullName !== nextFullName);
+
+      if (hasApplicantIdentity || userChanged) {
         sessionPatch.isAuthenticated = true;
         sessionPatch.authSource = 'web';
-        sessionPatch.userRole = 'citizen';
+        sessionPatch.userRole = targetRole;
         sessionPatch.userId = effectiveId;
-        sessionPatch.email = applicant?.email || 'citizen@govguide.ph';
-        sessionPatch.fullName =
-          applicant?.display_name ||
-          [applicant?.first_name, applicant?.last_name].filter(Boolean).join(' ') ||
-          'Citizen Session';
+        sessionPatch.email = applicant?.email || existingSession.email || 'citizen@govguide.ph';
+        sessionPatch.fullName = nextFullName;
       }
 
       const nextSession = await saveSession(sessionPatch);
-      if (!existingSession.isAuthenticated && nextSession.isAuthenticated) {
+      if (
+        (!existingSession.isAuthenticated && nextSession.isAuthenticated) ||
+        userChanged
+      ) {
         broadcastSession(nextSession);
       }
       try {
@@ -413,6 +429,9 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
         return { success: false, error: json.error || 'Invalid email or password.' };
+      }
+      if (session.userId && session.userId !== json.user.userId) {
+        await saveLocalVault(EMPTY_VAULT_DATA);
       }
       const updated = await applyAuth(json.user, json.tokens, 'extension');
       return { success: true, session: publicSession(updated) };

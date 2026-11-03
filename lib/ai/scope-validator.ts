@@ -447,6 +447,23 @@ export function validateMessageScope(
     };
   }
 
+  // Check if message is a greeting or inquiry about assistant identity / capabilities
+  const isAssistantIdentityOrGreeting =
+    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|kaagapai|there|friend)|\s*[!?.])*$/i.test(text) ||
+    (text.split(/\s+/).length <= 4 && /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text)) ||
+    /^(who|what|sino|ano)\s+(are|is|r)\s+(you|u|this|govguide|kaagap)/i.test(text) ||
+    /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+ka\s+ba|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|how\s+can\s+you\s+help|what\s+services\s+do\s+you|ano\s+ang\s+magagawa\s+mo|paano\s+ka\s+makakatulong|magpakilala\s+ka|help\s+me|can\s+you\s+help|pwede\s+magtanong)\b/i.test(text);
+
+  if (isAssistantIdentityOrGreeting) {
+    return {
+      intent: 'GOVERNMENT_INFORMATION',
+      confidence: 0.95,
+      reason: 'Citizen greeting or inquiry about GovGuide PH civic assistant identity and capabilities.',
+      isCoherent: true,
+      isContextualFollowup: false,
+    };
+  }
+
   // Fallback: If query is coherent English/Tagalog sentence but has zero civic connection
   return {
     intent: 'OUT_OF_SCOPE',
