@@ -3,11 +3,14 @@ import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+const GUEST_CITIZEN_ID = 'e1000000-0000-4000-8000-000000000003';
+
 // Server-side in-memory cache as resilient backup when running in offline or mock modes
 const memoryThreadsStore = new Map<
   string,
   {
     id: string;
+    citizen_id: string | null;
     title: string;
     messages: unknown[];
     applicant_name: string;
@@ -21,11 +24,18 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Number(searchParams.get('limit') || '30'), 100);
+    const citizenId = searchParams.get('citizenId');
+
+    // Never return saved threads for unauthenticated guest sessions
+    if (!citizenId || citizenId === GUEST_CITIZEN_ID) {
+      return NextResponse.json({ ok: true, source: 'guest', threads: [] });
+    }
 
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from('chat_threads')
       .select('*')
+      .eq('citizen_id', citizenId)
       .order('updated_at', { ascending: false })
       .limit(limit);
 
@@ -33,20 +43,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, source: 'supabase', threads: data });
     }
 
-    // Fallback to in-memory store
-    const memList = Array.from(memoryThreadsStore.values()).sort(
-      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-    );
+    // Fallback to in-memory store filtered by citizenId
+    const memList = Array.from(memoryThreadsStore.values())
+      .filter((t) => t.citizen_id === citizenId)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
     return NextResponse.json({ ok: true, source: 'memory', threads: memList });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    const memList = Array.from(memoryThreadsStore.values());
     return NextResponse.json({
       ok: true,
       source: 'memory_fallback',
       warning: errorMessage,
-      threads: memList,
+      threads: [],
     });
   }
 }
@@ -54,13 +63,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, title, messages, applicantName, citizenId } = body;
+    const { id, title, messages, applicantName, citizenId, isGuest } = body;
 
     if (!id || !title || !Array.isArray(messages)) {
       return NextResponse.json(
         { ok: false, message: 'Invalid payload: id, title, and messages array are required' },
         { status: 400 },
       );
+    }
+
+    // Never persist AI chat threads for Guest Mode users
+    if (
+      isGuest ||
+      !citizenId ||
+      citizenId === GUEST_CITIZEN_ID ||
+      applicantName === 'Guest Account'
+    ) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: 'Guest mode chats are temporary and not saved',
+      });
     }
 
     // Cryptographic SHA-256 hash of the complete message thread and civic metadata
@@ -72,6 +95,14 @@ export async function POST(req: NextRequest) {
       citizenId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(citizenId))
         ? String(citizenId)
         : null;
+
+    if (!validCitizenId) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: 'Valid authenticated citizenId required to save chat threads',
+      });
+    }
 
     const threadRecord = {
       id: String(id),

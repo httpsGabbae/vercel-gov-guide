@@ -2972,12 +2972,25 @@ export default function CitizenChatPage() {
       try {
         // 0. Check Supabase auth session
         const { data: authData } = await supabase.auth.getUser();
-        let targetCitizenId = applicant.id;
+
+        if (!authData?.user) {
+          // Guest Mode: temporary session — do not load or persist any threads or profile details
+          if (isMounted) {
+            setAuthUser(null);
+            setApplicant(PROFILES.new_citizen);
+            setThreads([]);
+            setActiveThreadId(null);
+            setSavedFiles([]);
+            setChecklistItems(createCleanChecklists());
+            setInspections([]);
+          }
+          return;
+        }
 
         if (authData?.user && isMounted) {
           const user = authData.user;
           setAuthUser(user);
-          targetCitizenId = user.id;
+          const targetCitizenId = user.id;
 
           const { data: profile } = await supabase
             .from('profiles')
@@ -3034,27 +3047,27 @@ export default function CitizenChatPage() {
               title,
             }));
           }
-        }
 
-        // 1. Fetch citizen profile, vault documents, checklists, inspections from Supabase
-        const detailsRes = await fetch(`/api/citizen/details?citizenId=${encodeURIComponent(targetCitizenId)}`);
-        if (detailsRes.ok && isMounted) {
-          const { data } = await safeResponseJson(detailsRes);
-          if (data?.ok && data.applicant) {
-            setApplicant((prev) => ({ ...prev, ...data.applicant }));
-            if (Array.isArray(data.savedFiles)) setSavedFiles(data.savedFiles);
-            if (Array.isArray(data.checklistItems)) setChecklistItems(data.checklistItems);
-            if (Array.isArray(data.inspections)) setInspections(data.inspections);
+          // 1. Fetch citizen profile, vault documents, checklists, inspections from Supabase
+          const detailsRes = await fetch(`/api/citizen/details?citizenId=${encodeURIComponent(targetCitizenId)}`);
+          if (detailsRes.ok && isMounted) {
+            const { data } = await safeResponseJson(detailsRes);
+            if (data?.ok && data.applicant) {
+              setApplicant((prev) => ({ ...prev, ...data.applicant }));
+              if (Array.isArray(data.savedFiles)) setSavedFiles(data.savedFiles);
+              if (Array.isArray(data.checklistItems)) setChecklistItems(data.checklistItems);
+              if (Array.isArray(data.inspections)) setInspections(data.inspections);
+            }
           }
-        }
 
-        // 2. Fetch chat threads directly from Supabase
-        const threadsRes = await fetch('/api/chat/threads');
-        if (threadsRes.ok && isMounted) {
-          const { data } = await safeResponseJson(threadsRes);
-          if (data?.ok && Array.isArray(data.threads)) {
-            setThreads(data.threads);
-            // Keep activeThreadId as null on load/refresh so it returns to create another chat
+          // 2. Fetch chat threads directly from Supabase for this authenticated citizen only
+          const threadsRes = await fetch(`/api/chat/threads?citizenId=${encodeURIComponent(targetCitizenId)}`);
+          if (threadsRes.ok && isMounted) {
+            const { data } = await safeResponseJson(threadsRes);
+            if (data?.ok && Array.isArray(data.threads)) {
+              setThreads(data.threads);
+              // Keep activeThreadId as null on load/refresh so it returns to create another chat
+            }
           }
         }
       } catch {
@@ -3071,6 +3084,12 @@ export default function CitizenChatPage() {
         setAuthUser(session.user);
       } else if (!session && isMounted) {
         setAuthUser(null);
+        setApplicant(PROFILES.new_citizen);
+        setThreads([]);
+        setActiveThreadId(null);
+        setSavedFiles([]);
+        setChecklistItems(createCleanChecklists());
+        setInspections([]);
       }
     });
 
@@ -3081,8 +3100,9 @@ export default function CitizenChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Real-time synchronization with Chrome Extension & Agency Officer updates
+  // Real-time synchronization with Chrome Extension & Agency Officer updates (Authenticated only)
   useEffect(() => {
+    if (!authUser || applicant.id === PROFILES.new_citizen.id) return;
     let isMounted = true;
 
     async function checkAgencyUpdates() {
@@ -3185,10 +3205,12 @@ export default function CitizenChatPage() {
       clearInterval(interval);
       window.removeEventListener('focus', checkAgencyUpdates);
     };
-  }, [applicant.id, activeThreadId]);
+  }, [authUser, applicant.id, activeThreadId]);
 
-  // Persist Citizen Details & Broadcast to Chrome Extension in real-time
+  // Persist Citizen Details & Broadcast to Chrome Extension in real-time (Authenticated only)
   useEffect(() => {
+    if (!authUser || applicant.id === PROFILES.new_citizen.id) return;
+
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('govguide_active_applicant', JSON.stringify(applicant));
@@ -3221,10 +3243,12 @@ export default function CitizenChatPage() {
       });
     }, 250);
     return () => clearTimeout(timer);
-  }, [applicant, savedFiles, checklistItems, inspections]);
+  }, [authUser, applicant, savedFiles, checklistItems, inspections]);
 
   const syncThreadToSupabase = useCallback(
     async (thread: ConversationThread) => {
+      // Guest Mode chats are strictly temporary and must never be saved
+      if (!authUser || applicant.id === PROFILES.new_citizen.id) return;
       try {
         await fetch('/api/chat/threads', {
           method: 'POST',
@@ -3235,13 +3259,14 @@ export default function CitizenChatPage() {
             title: thread.title,
             applicantName: applicant.display_name,
             messages: thread.messages,
+            isGuest: false,
           }),
         });
       } catch {
         // Non-blocking sync
       }
     },
-    [applicant.id, applicant.display_name],
+    [authUser, applicant.id, applicant.display_name],
   );
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
@@ -3387,6 +3412,16 @@ export default function CitizenChatPage() {
       if (busy || (!textToSend && filesToSend.length === 0)) return;
 
       const safeDisplayText = redactSecrets(textToSend);
+      const isFirstTurnInChat =
+        activeThreadId === null ||
+        (threads.find((t) => t.id === activeThreadId)?.messages.length ?? 0) === 0;
+      const isSimpleFirstGreeting =
+        isFirstTurnInChat &&
+        filesToSend.length === 0 &&
+        /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|there|friend)|\s*[!?.])*$/i.test(
+          textToSend,
+        );
+
       let threadId = activeThreadId;
       if (threadId === null) {
         threadId = `chat-${Date.now()}`;
@@ -3399,6 +3434,84 @@ export default function CitizenChatPage() {
             : safeDisplayText;
         setThreads((prev) => [{ id: threadId!, title: rawTitle, messages: [] }, ...prev]);
         setActiveThreadId(threadId);
+      }
+
+      if (isSimpleFirstGreeting) {
+        const userMsgId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const agentMsgId = `agt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        latestPromptTurnIdRef.current = String(userMsgId);
+
+        const isFilGreeting =
+          language === 'Filipino' || /^(kumusta|kamusta)\b/i.test(textToSend);
+        const greetingReplyText = isFilGreeting
+          ? 'Magandang araw! Ako ang **GovGuide PH**. Maaari kitang tulungan sa iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?'
+          : 'Hello! I am **GovGuide PH**. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?';
+
+        const greetingUserMsg: ChatMessage = {
+          id: userMsgId,
+          from: 'user',
+          text: safeDisplayText,
+        };
+        const greetingAgentMsg: ChatMessage = {
+          id: agentMsgId,
+          from: 'agent',
+          phase: 'done',
+          reply: {
+            text: greetingReplyText,
+            cards: [],
+            next: [
+              {
+                id: 'offer_psa',
+                label: 'PSA Birth Certificate',
+                hint: isFilGreeting
+                  ? 'Requirements, doorstep delivery (₱365), o walk-in CRS (₱155)'
+                  : 'Requirements, doorstep delivery (₱365), or walk-in CRS (₱155)',
+                action: 'message',
+                text: isFilGreeting
+                  ? 'Paano kumuha ng PSA Birth Certificate at ano ang mga requirements?'
+                  : 'How do I get a PSA Birth Certificate and what are the requirements?',
+              },
+              {
+                id: 'offer_nbi',
+                label: 'NBI Clearance',
+                hint: isFilGreeting
+                  ? 'Requirements checklist, valid IDs, at RA 11261 First-Time Jobseeker'
+                  : 'Requirements checklist, valid IDs, and RA 11261 First-Time Jobseeker',
+                action: 'message',
+                text: isFilGreeting
+                  ? 'Ano ang mga requirements at hakbang sa pagkuha ng NBI Clearance?'
+                  : 'What are the requirements and steps to get an NBI Clearance?',
+              },
+              {
+                id: 'offer_brgy',
+                label: 'Barangay Certificate',
+                hint: isFilGreeting
+                  ? 'RA 11261 First-Time Jobseeker, 90-day validity, dry seal, at Oath of Undertaking'
+                  : 'RA 11261 First-Time Jobseeker, 90-day validity, dry seal, and Oath of Undertaking',
+                action: 'message',
+                text: isFilGreeting
+                  ? 'Paano kumuha ng Barangay Certificate (RA 11261) at ano ang dapat bantayan?'
+                  : 'How do I get a Barangay Certificate (RA 11261) and what should I check?',
+              },
+            ],
+          },
+        };
+
+        setThreads((prev) => {
+          const next = prev.map((t) =>
+            t.id === threadId
+              ? { ...t, messages: [...t.messages, greetingUserMsg, greetingAgentMsg] }
+              : t,
+          );
+          const currentT = next.find((t) => t.id === threadId);
+          if (currentT) {
+            void syncThreadToSupabase(currentT);
+          }
+          return next;
+        });
+        setInputText('');
+        setAttachedFiles([]);
+        return;
       }
 
       const previews = filesToSend.map((f) =>

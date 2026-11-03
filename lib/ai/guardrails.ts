@@ -654,11 +654,11 @@ export function answerSystemQuestion(
             `How can I assist you with your government transactions today?`
         : !applicant.display_name || applicant.role === 'new_citizen'
           ? isFil
-            ? 'Magandang araw! Ako ang GovGuide PH, ang iyong gabay sa mga serbisyo ng pamahalaan. Maaari kang magtanong tungkol sa NBI Clearance, PSA Birth Certificate, PhilHealth, o DFA Passport, o punan ang iyong profile sa My Details para sa personalized na gabay.'
-            : 'Hello! I am GovGuide PH, your guide for Philippine government services. You can ask about NBI Clearance, PSA Birth Certificates, PhilHealth, or DFA Passports, or fill up your profile in My Details for personalized guidance.'
+            ? 'Magandang araw! Ako ang GovGuide PH. Maaari kitang tulungan sa pagkuha at pagsusuri ng iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?'
+            : 'Hello! I am GovGuide PH. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?'
           : isFil
-            ? `Magandang araw, **${applicant.display_name}**! Ako ang **GovGuide PH**, ang iyong AI Pre-Flight Assistant para maiwasan ang *balik-pila* sa gobyerno. Maaari mo akong tanungin tungkol sa mga opisyal na requirements, bayarin, at mga proseso ng ahensya.`
-            : `Hello, **${applicant.display_name}**! I am **GovGuide PH**, your AI Pre-Flight Assistant designed to eliminate repeat queueing (*balik-pila*). I can help you with official requirements, fees, and government agency processes.`,
+            ? `Magandang araw, **${applicant.display_name}**! Ako ang **GovGuide PH**. Maaari kitang tulungan sa iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?`
+            : `Hello, **${applicant.display_name}**! I am **GovGuide PH**. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?`,
     };
   }
 

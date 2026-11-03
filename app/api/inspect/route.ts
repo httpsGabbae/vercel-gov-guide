@@ -1085,8 +1085,15 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const text: string = (body.text || '').trim();
-    const attachments: { name: string; type: string; dataUrl?: string }[] = Array.isArray(body.attachments) ? body.attachments : [];
-    const savedFiles: SavedVaultFile[] = Array.isArray(body.savedFiles) ? body.savedFiles : [];
+    const isGuest: boolean = Boolean(
+      body.isGuest ||
+        body.applicant?.id === 'e1000000-0000-4000-8000-000000000003' ||
+        body.applicant?.title === 'Guest Account',
+    );
+    const attachments: { name: string; type: string; dataUrl?: string }[] =
+      !isGuest && Array.isArray(body.attachments) ? body.attachments : [];
+    const savedFiles: SavedVaultFile[] =
+      !isGuest && Array.isArray(body.savedFiles) ? body.savedFiles : [];
     const language: string = body.language || 'Auto';
     const isDemoFile = attachments.some((a) =>
       ['expired-postal-id.png', 'incomplete-brgy-cert.png'].includes(a.name),
@@ -1130,8 +1137,8 @@ export async function POST(req: NextRequest) {
           }
         : applicantInput;
 
-    // Learn information from user's chat message to dynamically update My Details
-    const learnedDetails = extractLearnedDetails(text);
+    // Learn information from user's chat message to dynamically update My Details (only for signed-in citizens)
+    const learnedDetails = isGuest ? {} : extractLearnedDetails(text);
     const applicant: ApplicantProfile = {
       ...sanitizedInput,
       ...learnedDetails,
@@ -1161,6 +1168,65 @@ export async function POST(req: NextRequest) {
           sources: CHARTER_SOURCES,
         });
       }
+    }
+
+    const isSimpleGreeting =
+      attachments.length === 0 &&
+      Object.keys(learnedDetails).length === 0 &&
+      (/^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|there|friend)|\s*[!?.])*$/i.test(
+        text.trim(),
+      ) ||
+        (text.trim().split(/\s+/).length <= 4 &&
+          /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text.trim())));
+
+    if (isSimpleGreeting) {
+      const isFilGreeting = isFilipinoQuery(text, language);
+      const greetingText = isFilGreeting
+        ? 'Magandang araw! Ako ang **GovGuide PH**. Maaari kitang tulungan sa iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?'
+        : 'Hello! I am **GovGuide PH**. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?';
+      return NextResponse.json({
+        ok: true,
+        steps: [],
+        text: greetingText,
+        cards: [],
+        inspection: null,
+        next: [
+          {
+            id: 'offer_psa',
+            label: 'PSA Birth Certificate',
+            hint: isFilGreeting
+              ? 'Requirements, doorstep delivery (₱365), o walk-in CRS (₱155)'
+              : 'Requirements, doorstep delivery (₱365), or walk-in CRS (₱155)',
+            action: 'message',
+            text: isFilGreeting
+              ? 'Paano kumuha ng PSA Birth Certificate at ano ang mga requirements?'
+              : 'How do I get a PSA Birth Certificate and what are the requirements?',
+          },
+          {
+            id: 'offer_nbi',
+            label: 'NBI Clearance',
+            hint: isFilGreeting
+              ? 'Requirements checklist, valid IDs, at RA 11261 First-Time Jobseeker'
+              : 'Requirements checklist, valid IDs, and RA 11261 First-Time Jobseeker',
+            action: 'message',
+            text: isFilGreeting
+              ? 'Ano ang mga requirements at hakbang sa pagkuha ng NBI Clearance?'
+              : 'What are the requirements and steps to get an NBI Clearance?',
+          },
+          {
+            id: 'offer_brgy',
+            label: 'Barangay Certificate',
+            hint: isFilGreeting
+              ? 'RA 11261 First-Time Jobseeker, 90-day validity, dry seal, at Oath of Undertaking'
+              : 'RA 11261 First-Time Jobseeker, 90-day validity, dry seal, and Oath of Undertaking',
+            action: 'message',
+            text: isFilGreeting
+              ? 'Paano kumuha ng Barangay Certificate (RA 11261) at ano ang dapat bantayan?'
+              : 'How do I get a Barangay Certificate (RA 11261) and what should I check?',
+          },
+        ],
+        sources: CHARTER_SOURCES,
+      });
     }
 
     // Step 1: Retrieve official Citizen's Charter context
@@ -1799,7 +1865,7 @@ INSPECTION INSTRUCTIONS:
             : `Here is your official **Requirements Checklist** for **${checklist?.service_name || 'government services'}** personalized with your **My Details** profile (**${applicant.display_name}**). You can manage your saved files, checklists, and inspections in **My Details**, or attach photos/PDFs here for an AI pre-flight check.`);
     }
 
-    if (isNewUser && !inspection && !isGreeting && qaAnswer?.includeChecklist !== false) {
+    if (!isGuest && isNewUser && !inspection && !isGreeting && qaAnswer?.includeChecklist !== false) {
       const fillNotice = isFil
         ? 'Paalala: Maaari mo ring punan ang iyong profile sa My Details para sa personalized na pagsusuri ng dokumento.'
         : 'Note: You can also update your profile in My Details for personalized document pre-flight checks.';
@@ -1809,7 +1875,7 @@ INSPECTION INSTRUCTIONS:
     }
 
     // Append notification when new info has been learned
-    if (Object.keys(learnedDetails).length > 0) {
+    if (!isGuest && Object.keys(learnedDetails).length > 0) {
       if (inspection) {
         replyText += isFil
           ? `\n\n*Naitala at na-update ko ang iyong My Details profile batay sa iyong opisyal na dokumento.*`
@@ -1871,9 +1937,9 @@ INSPECTION INSTRUCTIONS:
       });
     }
 
-    // Initialize or retrieve real-time citizen process tracking for inquired service
+    // Initialize or retrieve real-time citizen process tracking for inquired service (only for signed-in citizens)
     let createdRequest = null;
-    if (applicant?.id) {
+    if (!isGuest && applicant?.id) {
       createdRequest = createOrGetRequestForInquiry({
         citizenId: applicant.id,
         citizenName:
@@ -2082,7 +2148,7 @@ INSPECTION INSTRUCTIONS:
       ];
     }
 
-    if (isNewUser && !next.some((n) => n.id === 'fill_my_details')) {
+    if (!isGuest && isNewUser && !next.some((n) => n.id === 'fill_my_details')) {
       next = [
         {
           id: 'fill_my_details',
@@ -2093,6 +2159,10 @@ INSPECTION INSTRUCTIONS:
         },
         ...next,
       ];
+    }
+
+    if (isGuest) {
+      next = next.filter((n) => n.action !== 'view' && n.action !== 'attach');
     }
 
     return NextResponse.json({
