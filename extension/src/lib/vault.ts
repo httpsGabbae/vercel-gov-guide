@@ -99,8 +99,12 @@ export const DEFAULT_SESSION: ExtensionSession = {
 };
 
 export async function getSession(): Promise<ExtensionSession> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get([STORAGE_SESSION_KEY], (res) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
       if (res[STORAGE_SESSION_KEY]) {
         resolve({ ...DEFAULT_SESSION, ...res[STORAGE_SESSION_KEY] });
       } else {
@@ -113,16 +117,24 @@ export async function getSession(): Promise<ExtensionSession> {
 export async function saveSession(updates: Partial<ExtensionSession>): Promise<ExtensionSession> {
   const current = await getSession();
   const merged: ExtensionSession = { ...current, ...updates };
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.set({ [STORAGE_SESSION_KEY]: merged }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
       resolve(merged);
     });
   });
 }
 
 export async function loadLocalVault(pin?: string): Promise<CitizenVaultData> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get([STORAGE_VAULT_KEY], async (res) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
       if (res[STORAGE_VAULT_KEY]) {
         try {
           const raw = res[STORAGE_VAULT_KEY] as string;
@@ -140,8 +152,12 @@ export async function loadLocalVault(pin?: string): Promise<CitizenVaultData> {
 
 export async function saveLocalVault(data: CitizenVaultData, pin?: string): Promise<void> {
   const encrypted = await encryptVault(data, pin);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.set({ [STORAGE_VAULT_KEY]: encrypted }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
       resolve();
     });
   });
@@ -229,109 +245,59 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
 
   const isSamePerson = Boolean(
     fallbackVault &&
-      ((curPhilsys && fbPhilsys && curPhilsys === fbPhilsys) ||
-        (curEmail && fbEmail && curEmail === fbEmail) ||
-        (curFn && curLn && fbFn === curFn && fbLn === curLn))
+    ((curPhilsys && fbPhilsys && curPhilsys === fbPhilsys) ||
+      (curEmail && fbEmail && curEmail === fbEmail) ||
+      (curFn && curLn && fbFn === curFn && fbLn === curLn)),
   );
 
   const fb = isSamePerson && fallbackVault ? fallbackVault : EMPTY_VAULT_DATA;
 
   return {
-    firstName: fn || (fb.firstName || ''),
-    middleName: mn || (fb.middleName || ''),
-    lastName: ln || (fb.lastName || ''),
-    suffix: suf || (fb.suffix || ''),
-    gender: a.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : (a.gender?.toUpperCase() === 'OTHER' ? 'OTHER' : 'MALE'),
-    dateOfBirth: a.birth_date || a.date_of_birth || (fb.dateOfBirth || ''),
-    placeOfBirth: a.place_of_birth || (a.city ? `${a.city}, Philippines` : (fb.placeOfBirth || '')),
-    civilStatus: (a.civil_status?.toUpperCase() as any) || (fb.civilStatus || 'SINGLE'),
-    nationality: a.nationality || (fb.nationality || 'FILIPINO'),
+    firstName: fn || fb.firstName || '',
+    middleName: mn || fb.middleName || '',
+    lastName: ln || fb.lastName || '',
+    suffix: suf || fb.suffix || '',
+    gender:
+      a.gender?.toUpperCase() === 'FEMALE'
+        ? 'FEMALE'
+        : a.gender?.toUpperCase() === 'OTHER'
+          ? 'OTHER'
+          : 'MALE',
+    dateOfBirth: a.birth_date || a.date_of_birth || fb.dateOfBirth || '',
+    placeOfBirth: a.place_of_birth || (a.city ? `${a.city}, Philippines` : fb.placeOfBirth || ''),
+    civilStatus: (a.civil_status?.toUpperCase() as any) || fb.civilStatus || 'SINGLE',
+    nationality: a.nationality || fb.nationality || 'FILIPINO',
 
-    fatherFullName: fFull || [fFn, fMn, fLn, fSuf].filter(Boolean).join(' ') || (fb.fatherFullName || ''),
-    fatherFirstName: fFn || (fb.fatherFirstName || ''),
-    fatherMiddleName: fMn || (fb.fatherMiddleName || ''),
-    fatherLastName: fLn || (fb.fatherLastName || ''),
-    fatherSuffix: fSuf || (fb.fatherSuffix || ''),
+    fatherFullName:
+      fFull || [fFn, fMn, fLn, fSuf].filter(Boolean).join(' ') || fb.fatherFullName || '',
+    fatherFirstName: fFn || fb.fatherFirstName || '',
+    fatherMiddleName: fMn || fb.fatherMiddleName || '',
+    fatherLastName: fLn || fb.fatherLastName || '',
+    fatherSuffix: fSuf || fb.fatherSuffix || '',
 
-    motherMaidenFirstName: mFn || (fb.motherMaidenFirstName || ''),
-    motherMaidenMiddleName: mMn || (fb.motherMaidenMiddleName || ''),
-    motherMaidenLastName: mLn || (fb.motherMaidenLastName || ''),
-    motherMaidenSuffix: mSuf || (fb.motherMaidenSuffix || ''),
+    motherMaidenFirstName: mFn || fb.motherMaidenFirstName || '',
+    motherMaidenMiddleName: mMn || fb.motherMaidenMiddleName || '',
+    motherMaidenLastName: mLn || fb.motherMaidenLastName || '',
+    motherMaidenSuffix: mSuf || fb.motherMaidenSuffix || '',
 
-    mobileNumber: a.phone || a.mobile || a.mobile_number || a.contact_number || (fb.mobileNumber || ''),
-    emailAddress: a.email || (fb.emailAddress || ''),
-    landline: a.landline || (fb.landline || ''),
+    mobileNumber:
+      a.phone || a.mobile || a.mobile_number || a.contact_number || fb.mobileNumber || '',
+    emailAddress: a.email || fb.emailAddress || '',
+    landline: a.landline || fb.landline || '',
 
-    region: a.region || (fb.region || ''),
-    province: a.province || (fb.province || ''),
-    cityMunicipality: a.city || (fb.cityMunicipality || ''),
-    barangay: a.barangay || (fb.barangay || ''),
-    streetHouseNumber: a.street_address || a.residential_address || (fb.streetHouseNumber || ''),
-    zipCode: a.zip_code || (fb.zipCode || ''),
+    region: a.region || fb.region || '',
+    province: a.province || fb.province || '',
+    cityMunicipality: a.city || fb.cityMunicipality || '',
+    barangay: a.barangay || fb.barangay || '',
+    streetHouseNumber: a.street_address || a.residential_address || fb.streetHouseNumber || '',
+    zipCode: a.zip_code || fb.zipCode || '',
 
-    philsysId: a.philsys_id || a.philsys_card_number || (fb.philsysId || ''),
-    tin: a.tin || a.tin_number || (fb.tin || ''),
-    sssNumber: a.sss_number || (fb.sssNumber || ''),
-    philhealthNumber: a.philhealth_number || (fb.philhealthNumber || ''),
-    pagibigMid: a.pagibig_number || a.pagibigMid || (fb.pagibigMid || ''),
-    passportNumber: a.passport_number || a.passportNumber || (fb.passportNumber || ''),
+    philsysId: a.philsys_id || a.philsys_card_number || fb.philsysId || '',
+    tin: a.tin || a.tin_number || fb.tin || '',
+    sssNumber: a.sss_number || fb.sssNumber || '',
+    philhealthNumber: a.philhealth_number || fb.philhealthNumber || '',
+    pagibigMid: a.pagibig_number || a.pagibigMid || fb.pagibigMid || '',
+    passportNumber: a.passport_number || a.passportNumber || fb.passportNumber || '',
     relationshipToOwner: a.relationship || (fb as any).relationshipToOwner || 'Self',
   };
-}
-
-/**
- * Syncs the Citizen's Details with the GovGuide PH Web App API
- */
-export async function syncVaultFromGovGuide(
-  apiUrl: string,
-  citizenId?: string,
-  accessToken?: string
-): Promise<CitizenVaultData> {
-  const targetId = citizenId && citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0' ? citizenId : 'active';
-  const headers: Record<string, string> = {
-    'x-extension-id': 'govguide-extension',
-  };
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
-
-  // Candidate port fallback: if the configured port is unreachable, probe candidate dev ports
-  const candidateUrls = [apiUrl];
-  const commonPorts = ['3000', '3001', '3002', '3003', '3010', '3011', '3100'];
-  for (const p of commonPorts) {
-    const candidate = `http://localhost:${p}`;
-    if (!candidateUrls.includes(candidate)) {
-      candidateUrls.push(candidate);
-    }
-  }
-
-  let lastError: Error | null = null;
-  for (const base of candidateUrls) {
-    try {
-      const res = await fetch(`${base}/api/citizen/details?citizenId=${encodeURIComponent(targetId)}`, {
-        headers,
-      });
-      if (!res.ok) {
-        lastError = new Error(`GovGuide Sync error: ${res.statusText}`);
-        continue;
-      }
-      const json = await res.json();
-      if (json.ok && json.applicant) {
-        const currentVault = await loadLocalVault();
-        const syncedVault = applicantToVault(json.applicant, currentVault);
-
-        await saveLocalVault(syncedVault);
-        await saveSession({
-          lastSyncedAt: new Date().toISOString(),
-          citizenId: json.applicant.id || targetId,
-          apiBaseUrl: base,
-        });
-        return syncedVault;
-      }
-    } catch (err: any) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-    }
-  }
-
-  throw lastError || new Error('No applicant profile returned from GovGuide');
 }

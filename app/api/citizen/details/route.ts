@@ -16,10 +16,8 @@ import type {
   InspectionReport,
 } from '@/lib/services/charter-sources';
 
-const DEFAULT_CITIZEN_ID = PROFILES.new_citizen.id;
 
 // Memory cache for active session across hot updates & extension bridge
-let latestActiveCitizenId: string = PROFILES.new_citizen.id;
 let latestActiveApplicant: ApplicantProfile = PROFILES.new_citizen;
 let latestActiveSavedFiles: SavedVaultFile[] = [];
 let latestActiveChecklists: ChecklistRequirementItem[] = createCleanChecklists();
@@ -49,20 +47,13 @@ interface CitizenDetailsPayload {
 
 export async function GET(req: NextRequest) {
   try {
-    const isExtension = Boolean(req.headers.get('x-extension-id'));
     const { searchParams } = new URL(req.url);
     const queryId = searchParams.get('citizenId');
     const isExplicitActiveQuery = !queryId || queryId === 'active' || queryId === 'latest';
-    let citizenId: string;
-
-    if (isExtension) {
-      citizenId = isExplicitActiveQuery ? latestActiveCitizenId : (queryId || DEFAULT_CITIZEN_ID);
-    } else {
-      const access = await requireDetailsUnlock(req);
-      if ('response' in access) return access.response;
-      citizenId = access.userId;
-      if (!isExplicitActiveQuery && queryId !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
-    }
+    const access = await requireDetailsUnlock(req);
+    if ('response' in access) return access.response;
+    const citizenId = access.userId;
+    if (!isExplicitActiveQuery && queryId !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
 
     // Instant return if querying active session and in-memory cache has applicant data
     const hasMeaningfulActiveData =
@@ -71,7 +62,7 @@ export async function GET(req: NextRequest) {
       Boolean(latestActiveApplicant?.last_name?.trim()) ||
       Boolean(latestActiveApplicant?.email?.trim());
 
-    if (isExplicitActiveQuery && latestActiveApplicant && hasMeaningfulActiveData && (isExtension || latestActiveApplicant.id === citizenId)) {
+    if (isExplicitActiveQuery && latestActiveApplicant && hasMeaningfulActiveData && latestActiveApplicant.id === citizenId) {
       return NextResponse.json(
         {
           ok: true,
@@ -332,26 +323,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const isExtension = Boolean(req.headers.get('x-extension-id'));
-    let effectiveUserId: string;
-
-    if (!isExtension) {
-      const access = await requireDetailsUnlock(req);
-      if ('response' in access) return access.response;
-      effectiveUserId = access.userId;
-    } else {
-      effectiveUserId = latestActiveCitizenId || DEFAULT_CITIZEN_ID;
-    }
-
+    const access = await requireDetailsUnlock(req);
+    if ('response' in access) return access.response;
+    const effectiveUserId = access.userId;
     const body = await req.json().catch(() => ({}));
-    if (isExtension && body.citizenId) {
-      effectiveUserId = body.citizenId;
-    }
-
-    if (!isExtension) {
-      if (body.citizenId !== effectiveUserId || (body.applicant?.id && body.applicant.id !== effectiveUserId)) {
-        return pinError('Access denied.', 403, 'FORBIDDEN');
-      }
+    if (body.citizenId !== effectiveUserId || (body.applicant?.id && body.applicant.id !== effectiveUserId)) {
+      return pinError('Access denied.', 403, 'FORBIDDEN');
     }
 
     const {
@@ -369,12 +346,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isExtension) {
-      applicant.id = effectiveUserId;
-    }
+    applicant.id = effectiveUserId;
 
     // Always update the active session memory cache immediately
-    latestActiveCitizenId = citizenId;
     latestActiveApplicant = applicant;
     if (Array.isArray(savedFiles)) latestActiveSavedFiles = savedFiles;
     if (Array.isArray(checklistItems)) latestActiveChecklists = checklistItems;
@@ -432,18 +406,11 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const isExtension = Boolean(req.headers.get('x-extension-id'));
     const { searchParams } = new URL(req.url);
-    let citizenId: string;
-
-    if (isExtension) {
-      citizenId = searchParams.get('citizenId') || latestActiveCitizenId || DEFAULT_CITIZEN_ID;
-    } else {
-      const access = await requireDetailsUnlock(req);
-      if ('response' in access) return access.response;
-      citizenId = access.userId;
-      if (searchParams.has('citizenId') && searchParams.get('citizenId') !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
-    }
+    const access = await requireDetailsUnlock(req);
+    if ('response' in access) return access.response;
+    const citizenId = access.userId;
+    if (searchParams.has('citizenId') && searchParams.get('citizenId') !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
 
     const isMarried = citizenId === PROFILES.married_applicant.id;
     const isJobseeker = citizenId === PROFILES.jobseeker.id;
@@ -457,7 +424,6 @@ export async function DELETE(req: NextRequest) {
     const initialInspections = createInitialInspections();
 
     latestActiveApplicant = initialApplicant;
-    latestActiveCitizenId = citizenId;
     latestActiveSavedFiles = initialFiles;
     latestActiveChecklists = initialChecklists;
     latestActiveInspections = initialInspections;

@@ -22,6 +22,12 @@ interface CivicMarkdownProps {
 }
 
 type Block =
+  | {
+      type: 'steps';
+      title?: string;
+      requirements?: boolean;
+      items: { num: number; text: string; details: Block[] }[];
+    }
   | { type: 'heading'; level: number; text: string }
   | { type: 'code'; lang: string; code: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
@@ -29,7 +35,7 @@ type Block =
   | { type: 'tip'; text: string }
   | { type: 'alert'; variant: 'guardrail' | 'civic'; text: string }
   | { type: 'ul'; items: { text: string; checked?: boolean }[] }
-  | { type: 'ol'; items: string[] }
+  | { type: 'ol'; items: { num: number; text: string }[] }
   | { type: 'hr' }
   | { type: 'paragraph'; lines: string[] };
 
@@ -38,19 +44,74 @@ export function CivicMarkdown({ content, onOpenSource }: CivicMarkdownProps) {
 
   const blocks = parseMarkdownBlocks(content);
 
+  return <MarkdownBlocks blocks={blocks} onOpenSource={onOpenSource} />;
+}
+
+function MarkdownBlocks({
+  blocks,
+  onOpenSource,
+  compact = false,
+}: {
+  blocks: Block[];
+  onOpenSource?: (sourceId: string) => void;
+  compact?: boolean;
+}) {
   return (
-    <div className="w-full text-[14.5px] sm:text-[15px] leading-[1.65] text-slate-800 font-normal">
+    <div
+      className={`w-full text-slate-800 font-normal ${compact ? 'text-[11.5px] leading-snug' : 'text-[14.5px] sm:text-[15px] leading-[1.65]'}`}
+    >
       {blocks.map((block, bIdx) => {
         switch (block.type) {
+          case 'steps':
+            return (
+              <section
+                key={`steps-${bIdx}`}
+                aria-label={block.requirements ? 'Requirements checklist' : 'Step-by-step guide'}
+                className="my-3 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+              >
+                {block.title && (
+                  <div className="border-b border-slate-200 px-4 py-3 text-[14px] font-semibold text-slate-900 sm:px-5">
+                    <FormattedLine text={block.title} onOpenSource={onOpenSource} />
+                  </div>
+                )}
+                <ol className="m-0 list-none px-4 pt-2 pb-1 sm:px-5" role="list">
+                  {block.items.map((item, index) => (
+                    <li key={index} value={item.num} className="relative pb-3.5">
+                      {index < block.items.length - 1 && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute left-[13px] top-7 bottom-0 w-0.5 bg-slate-200"
+                        />
+                      )}
+                      <div className="flex items-start gap-3">
+                        <span
+                          aria-hidden="true"
+                          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700"
+                        >
+                          {item.num}
+                        </span>
+                        <div className="min-w-0 flex-1 break-words rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                          <div className="mb-2 text-xs sm:text-[13px] font-semibold text-slate-900">
+                            <span className="sr-only">
+                              {block.requirements ? 'Requirement' : 'Step'} {item.num}:{' '}
+                            </span>
+                            <FormattedLine text={item.text} onOpenSource={onOpenSource} />
+                          </div>
+                          <MarkdownBlocks
+                            blocks={item.details}
+                            onOpenSource={onOpenSource}
+                            compact
+                          />
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            );
           case 'heading': {
             const HeadingTag =
-              block.level === 1
-                ? 'h1'
-                : block.level === 2
-                  ? 'h2'
-                  : block.level === 3
-                    ? 'h3'
-                    : 'h4';
+              block.level === 1 ? 'h1' : block.level === 2 ? 'h2' : block.level === 3 ? 'h3' : 'h4';
             const sizeClass =
               block.level === 1
                 ? 'text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-4 mb-2 first:mt-0'
@@ -177,10 +238,10 @@ export function CivicMarkdown({ content, onOpenSource }: CivicMarkdownProps) {
                 {block.items.map((item, iIdx) => (
                   <li key={`oli-${iIdx}`} className="flex items-start gap-2">
                     <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-bold text-emerald-800 border border-emerald-200/80">
-                      {iIdx + 1}
+                      {item.num}
                     </span>
                     <span className="flex-1">
-                      <FormattedLine text={item} onOpenSource={onOpenSource} />
+                      <FormattedLine text={item.text} onOpenSource={onOpenSource} />
                     </span>
                   </li>
                 ))}
@@ -284,7 +345,11 @@ function parseMarkdownBlocks(text: string): Block[] {
     }
 
     // Markdown Table: starts with | and next line has |---
-    if (trimmed.startsWith('|') && i + 1 < lines.length && lines[i + 1].trim().match(/^\|(?:\s*:?-+:?\s*\|)+$/)) {
+    if (
+      trimmed.startsWith('|') &&
+      i + 1 < lines.length &&
+      lines[i + 1].trim().match(/^\|(?:\s*:?-+:?\s*\|)+$/)
+    ) {
       const headers = trimmed
         .split('|')
         .slice(1, -1)
@@ -383,9 +448,15 @@ function parseMarkdownBlocks(text: string): Block[] {
 
     // Ordered List: starts with 1. or 2.
     if (trimmed.match(/^\d+\.\s+/)) {
-      const items: string[] = [];
+      const items: { num: number; text: string }[] = [];
       while (i < lines.length && lines[i].trim().match(/^\d+\.\s+/)) {
-        items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
+        const lineTrimmed = lines[i].trim();
+        const numMatch = lineTrimmed.match(/^(\d+)\.\s+(.*)$/);
+        const stepNum = numMatch ? parseInt(numMatch[1], 10) : items.length + 1;
+        items.push({
+          num: stepNum,
+          text: numMatch ? numMatch[2] : lineTrimmed.replace(/^\d+\.\s+/, ''),
+        });
         i++;
       }
       blocks.push({ type: 'ol', items });
@@ -420,7 +491,90 @@ function parseMarkdownBlocks(text: string): Block[] {
     }
   }
 
-  return blocks;
+  return groupStepBlocks(blocks);
+}
+
+// Keep a procedure and its supporting bullets together across blank lines.
+// This is agency-independent and also handles Markdown's repeated `1.` markers.
+function groupStepBlocks(blocks: Block[]): Block[] {
+  const result: Block[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const heading =
+      block.type === 'heading'
+        ? block.text
+        : block.type === 'paragraph' &&
+            block.lines.length === 1 &&
+            /^\*\*.+\*\*$/.test(block.lines[0])
+          ? block.lines[0]
+          : undefined;
+    const next = blocks[i + 1];
+    if (
+      heading &&
+      /requirements?|required documents?|kailangang dalhin|mga dokumento/i.test(heading) &&
+      next?.type === 'ul'
+    ) {
+      result.push({
+        type: 'steps',
+        requirements: true,
+        title: heading,
+        items: next.items.map((item, index) => ({
+          num: index + 1,
+          text: item.checked === undefined ? item.text : `${item.checked ? '☑' : '☐'} ${item.text}`,
+          details: [],
+        })),
+      });
+      i++;
+      continue;
+    }
+    if (block.type !== 'ol') {
+      result.push(block);
+      continue;
+    }
+
+    const previous = result.at(-1);
+    let title: string | undefined;
+    if (previous?.type === 'heading') {
+      title = previous.text;
+    } else if (
+      previous?.type === 'paragraph' &&
+      previous.lines.length === 1 &&
+      /^\*\*.+\*\*$/.test(previous.lines[0])
+    ) {
+      title = previous.lines[0];
+    }
+    if (title) result.pop();
+
+    const items: { num: number; text: string; details: Block[] }[] = [];
+    let current: Block | undefined = block;
+    while (current?.type === 'ol' || current?.type === 'ul') {
+      if (current.type === 'ol') {
+        for (const item of current.items) {
+          items.push({
+            ...item,
+            num: item.num === 1 && items.length ? items[items.length - 1].num + 1 : item.num,
+            // Repair a duplicated number inside an emphasized step heading.
+            text: item.text.replace(/^\*\*\d+(?=[A-Za-z])/, '**'),
+            details: [],
+          });
+        }
+      } else {
+        items[items.length - 1].details.push(current);
+      }
+      i++;
+      current = blocks[i];
+    }
+    i--;
+    result.push({
+      type: 'steps',
+      title,
+      items,
+      requirements: Boolean(
+        title && /requirements?|required documents?|kailangang dalhin|mga dokumento/i.test(title),
+      ),
+    });
+  }
+  return result;
 }
 
 function renderTextWithLinks(raw: string, onOpenSource?: (sourceId: string) => void) {
@@ -497,6 +651,14 @@ function FormattedLine({
         // Inline Code `...`
         if (token.startsWith('`') && token.endsWith('`')) {
           const codeText = token.slice(1, -1);
+
+          if (/^https?:\/\//.test(codeText)) {
+            return (
+              <React.Fragment key={idx}>
+                {renderTextWithLinks(codeText, onOpenSource)}
+              </React.Fragment>
+            );
+          }
 
           // Citizen's Charter Citation (e.g. `[NBI Citizen's Charter 2025]`)
           if (
@@ -584,7 +746,7 @@ function FormattedLine({
           const boldText = token.slice(2, -2);
           return (
             <strong key={idx} className="font-semibold text-slate-900">
-              {renderTextWithLinks(boldText, onOpenSource)}
+              <FormattedLine text={boldText} onOpenSource={onOpenSource} />
             </strong>
           );
         }
@@ -601,9 +763,7 @@ function FormattedLine({
 
         // Plain text with clickable links
         return (
-          <React.Fragment key={idx}>
-            {renderTextWithLinks(token, onOpenSource)}
-          </React.Fragment>
+          <React.Fragment key={idx}>{renderTextWithLinks(token, onOpenSource)}</React.Fragment>
         );
       })}
     </>

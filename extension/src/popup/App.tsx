@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { CitizenVaultData, ExtensionSession, AgencyServiceRequest, ProcessStatus } from '../types';
+import type {
+  CitizenVaultData,
+  ExtensionSession,
+  AgencyServiceRequest,
+  ProcessStatus,
+} from '../types';
 import { generateOfficialNoticeLetter, type GeneratedLetterResult } from '../lib/letter-generator';
 import {
   type CitizenChatMessage,
@@ -61,7 +66,9 @@ export function App() {
   const [aiLetterDraft, setAiLetterDraft] = useState('');
 
   // Citizen Mini Chatbot States
-  const [chatMessages, setChatMessages] = useState<CitizenChatMessage[]>([INITIAL_GREETING_MESSAGE]);
+  const [chatMessages, setChatMessages] = useState<CitizenChatMessage[]>([
+    INITIAL_GREETING_MESSAGE,
+  ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -85,37 +92,47 @@ export function App() {
     setAiLetterDraft('');
   };
 
-  const fetchAgencyRequests = useCallback((q: string) => {
-    setSearching(true);
-    chrome.runtime.sendMessage({ type: 'FETCH_AGENCY_REQUESTS', payload: { q } }, (res) => {
-      setSearching(false);
-      if (res && res.success && Array.isArray(res.data)) {
-        const list: AgencyServiceRequest[] = res.data;
-        setRequests(list);
-        setIsOnline(true);
-        setSelectedReq((prev) => {
-          const keep = prev ? list.find((r) => r.id === prev.id) : undefined;
-          const next = keep ?? list[0] ?? null;
-          if (next && (!prev || prev.id !== next.id)) {
-            setProcessStatus(next.processStatus || 'on_process');
-          }
-          return next;
-        });
-      } else {
-        setIsOnline(false);
-        if (res?.error) flash({ text: res.error, type: 'error' }, 4500);
-      }
-    });
-  }, [flash]);
+  const fetchAgencyRequests = useCallback(
+    (q: string) => {
+      setSearching(true);
+      chrome.runtime.sendMessage({ type: 'FETCH_AGENCY_REQUESTS', payload: { q } }, (res) => {
+        setSearching(false);
+        if (res && res.success && Array.isArray(res.data)) {
+          const list: AgencyServiceRequest[] = res.data;
+          setRequests(list);
+          setIsOnline(true);
+          setSelectedReq((prev) => {
+            const keep = prev ? list.find((r) => r.id === prev.id) : undefined;
+            const next = keep ?? list[0] ?? null;
+            if (next && (!prev || prev.id !== next.id)) {
+              setProcessStatus(next.processStatus || 'on_process');
+            }
+            return next;
+          });
+        } else {
+          setIsOnline(false);
+          if (res?.error) flash({ text: res.error, type: 'error' }, 4500);
+        }
+      });
+    },
+    [flash],
+  );
 
   const loadVault = useCallback(() => {
-    chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (res) => {
-      if (res && res.vault) {
+    chrome.runtime.sendMessage({ type: 'SYNC_FROM_GOVGUIDE' }, (res) => {
+      const runtimeError = chrome.runtime.lastError;
+      if (!runtimeError && res?.success && res.vault) {
         setVault(res.vault);
         setEditFormData(res.vault);
         setIsOnline(true);
       } else {
         setIsOnline(false);
+        chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (cached) => {
+          if (!chrome.runtime.lastError && cached?.vault) {
+            setVault(cached.vault);
+            setEditFormData(cached.vault);
+          }
+        });
       }
     });
   }, []);
@@ -129,7 +146,7 @@ export function App() {
         loadVault();
       }
     },
-    [fetchAgencyRequests, loadVault]
+    [fetchAgencyRequests, loadVault],
   );
 
   // Load session on mount and listen for live updates
@@ -145,8 +162,9 @@ export function App() {
       if (msg && msg.type === 'VAULT_UPDATED' && msg.vault) {
         setVault(msg.vault);
         setEditFormData(msg.vault);
-        setIsOnline(true);
-        flash({ text: 'Synchronized with GovGuide PH (My Details).', type: 'success' });
+        setIsOnline(msg.online !== false);
+        if (msg.online !== false)
+          flash({ text: 'Synchronized with GovGuide PH (My Details).', type: 'success' });
       }
       if (msg && msg.type === 'SESSION_UPDATED' && msg.session) {
         const prev = sessionRef.current;
@@ -221,7 +239,7 @@ export function App() {
         } else {
           setLoginError(res?.error || 'Unable to sign in. Ensure GovGuide PH is running.');
         }
-      }
+      },
     );
   };
 
@@ -255,16 +273,23 @@ export function App() {
   const handleSyncGovGuide = () => {
     setSyncing(true);
     setStatusMsg(null);
-    chrome.runtime.sendMessage({ type: 'SYNC_FROM_GOVGUIDE', payload: { citizenId: 'active' } }, (res) => {
+    chrome.runtime.sendMessage({ type: 'SYNC_FROM_GOVGUIDE' }, (res) => {
       setSyncing(false);
-      if (res && res.vault) {
+      const runtimeError = chrome.runtime.lastError?.message;
+      if (!runtimeError && res?.success && res.vault) {
         setVault(res.vault);
         setEditFormData(res.vault);
         setIsOnline(true);
         flash({ text: 'In sync with GovGuide PH (My Details).', type: 'success' });
       } else {
         setIsOnline(false);
-        flash({ text: res?.error || 'Unable to connect to GovGuide PH. Ensure the web app is running.', type: 'warning' }, 4500);
+        flash(
+          {
+            text: res?.error || 'Open GovGuide PH and unlock My Details, then try again.',
+            type: 'warning',
+          },
+          4500,
+        );
       }
     });
   };
@@ -282,22 +307,56 @@ export function App() {
       chrome.tabs.sendMessage(activeTabId, { type: 'DETECT_FIELDS_REQUEST' }, (response) => {
         if (chrome.runtime.lastError) {
           setAutofilling(false);
-          flash({ text: 'Please refresh the active government portal page to enable autofill.', type: 'warning' }, 4500);
+          flash(
+            {
+              text: 'Please refresh the active government portal page to enable autofill.',
+              type: 'warning',
+            },
+            4500,
+          );
           return;
         }
-        if (response && response.summary && response.summary.fields && response.summary.fields.length > 0) {
+        if (
+          response &&
+          response.summary &&
+          response.summary.fields &&
+          response.summary.fields.length > 0
+        ) {
           const fields = response.summary.fields;
-          chrome.tabs.sendMessage(activeTabId, { type: 'TRIGGER_AUTOFILL', payload: { fields } }, (autofillRes) => {
-            setAutofilling(false);
-            if (autofillRes && autofillRes.success) {
-              flash({ text: `Filled ${autofillRes.filledCount} verified fields on the active portal.`, type: 'success' }, 4000);
-            } else {
-              flash({ text: 'Autofill completed.', type: 'success' }, 3500);
-            }
-          });
+          chrome.tabs.sendMessage(
+            activeTabId,
+            { type: 'TRIGGER_AUTOFILL', payload: { fields } },
+            (autofillRes) => {
+              setAutofilling(false);
+              const runtimeError = chrome.runtime.lastError;
+              if (!runtimeError && autofillRes?.success) {
+                flash(
+                  {
+                    text: `Filled ${autofillRes.filledCount} verified fields on the active portal.`,
+                    type: 'success',
+                  },
+                  4000,
+                );
+              } else {
+                flash(
+                  {
+                    text: 'Autofill failed. Refresh the portal page and try again.',
+                    type: 'warning',
+                  },
+                  3500,
+                );
+              }
+            },
+          );
         } else {
           setAutofilling(false);
-          flash({ text: 'No recognized Philippine government form fields on this page.', type: 'warning' }, 4000);
+          flash(
+            {
+              text: 'No recognized Philippine government form fields on this page.',
+              type: 'warning',
+            },
+            4000,
+          );
         }
       });
     });
@@ -312,69 +371,94 @@ export function App() {
 
   const handleSaveEditForm = async () => {
     if (!editFormData) return;
-    setVault(editFormData);
-    setIsEditing(false);
-
-    // Save to local extension vault
-    chrome.runtime.sendMessage({
-      type: 'SAVE_VAULT',
-      payload: { vault: editFormData },
-    });
-
-    // Also push back to GovGuide PH web server to keep web session in sync
-    if (session?.apiBaseUrl) {
-      try {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'x-extension-id': 'govguide-extension',
-        };
-        if (session.accessToken) {
-          headers['Authorization'] = `Bearer ${session.accessToken}`;
-        }
-        await fetch(`${session.apiBaseUrl}/api/citizen/details`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            citizenId: session.citizenId || 'active',
-            applicant: {
-              first_name: editFormData.firstName,
-              middle_name: editFormData.middleName,
-              last_name: editFormData.lastName,
-              suffix: editFormData.suffix,
-              display_name: [editFormData.firstName, editFormData.middleName, editFormData.lastName, editFormData.suffix].filter(Boolean).join(' ').trim(),
-              gender: editFormData.gender,
-              birth_date: editFormData.dateOfBirth,
-              father_name: editFormData.fatherFullName || [editFormData.fatherFirstName, editFormData.fatherMiddleName, editFormData.fatherLastName].filter(Boolean).join(' ').trim(),
-              father_first_name: editFormData.fatherFirstName,
-              father_middle_name: editFormData.fatherMiddleName,
-              father_last_name: editFormData.fatherLastName,
-              mother_maiden_name: [editFormData.motherMaidenFirstName, editFormData.motherMaidenMiddleName, editFormData.motherMaidenLastName].filter(Boolean).join(' ').trim(),
-              mother_first_name: editFormData.motherMaidenFirstName,
-              mother_middle_name: editFormData.motherMaidenMiddleName,
-              mother_last_name: editFormData.motherMaidenLastName,
-              philsys_id: editFormData.philsysId,
-              philsys_card_number: editFormData.philsysId,
-              philhealth_number: editFormData.philhealthNumber,
-              tin: editFormData.tin,
-              tin_number: editFormData.tin,
-              sss_number: editFormData.sssNumber,
-              pagibig_number: editFormData.pagibigMid,
-              passport_number: editFormData.passportNumber,
-              street_address: editFormData.streetHouseNumber,
-              barangay: editFormData.barangay,
-              city: editFormData.cityMunicipality,
-              province: editFormData.province,
-              zip_code: editFormData.zipCode,
-              phone: editFormData.mobileNumber,
-              contact_number: editFormData.mobileNumber,
-              email: editFormData.emailAddress,
-            },
-          }),
-        });
-        flash({ text: 'Details saved and synchronized with GovGuide PH.', type: 'success' }, 3000);
-      } catch {
-        flash({ text: 'Saved to local vault (offline mode).', type: 'warning' }, 3000);
-      }
+    setSyncing(true);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SAVE_WEB_DETAILS',
+        payload: {
+          applicant: {
+            first_name: editFormData.firstName,
+            middle_name: editFormData.middleName,
+            last_name: editFormData.lastName,
+            suffix: editFormData.suffix,
+            display_name: [
+              editFormData.firstName,
+              editFormData.middleName,
+              editFormData.lastName,
+              editFormData.suffix,
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .trim(),
+            gender: editFormData.gender,
+            birth_date: editFormData.dateOfBirth,
+            father_name:
+              editFormData.fatherFullName ||
+              [
+                editFormData.fatherFirstName,
+                editFormData.fatherMiddleName,
+                editFormData.fatherLastName,
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .trim(),
+            father_first_name: editFormData.fatherFirstName,
+            father_middle_name: editFormData.fatherMiddleName,
+            father_last_name: editFormData.fatherLastName,
+            mother_maiden_name: [
+              editFormData.motherMaidenFirstName,
+              editFormData.motherMaidenMiddleName,
+              editFormData.motherMaidenLastName,
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .trim(),
+            mother_first_name: editFormData.motherMaidenFirstName,
+            mother_middle_name: editFormData.motherMaidenMiddleName,
+            mother_last_name: editFormData.motherMaidenLastName,
+            philsys_id: editFormData.philsysId,
+            philsys_card_number: editFormData.philsysId,
+            philhealth_number: editFormData.philhealthNumber,
+            tin: editFormData.tin,
+            tin_number: editFormData.tin,
+            sss_number: editFormData.sssNumber,
+            pagibig_number: editFormData.pagibigMid,
+            passport_number: editFormData.passportNumber,
+            street_address: editFormData.streetHouseNumber,
+            barangay: editFormData.barangay,
+            city: editFormData.cityMunicipality,
+            province: editFormData.province,
+            zip_code: editFormData.zipCode,
+            phone: editFormData.mobileNumber,
+            contact_number: editFormData.mobileNumber,
+            email: editFormData.emailAddress,
+            place_of_birth: editFormData.placeOfBirth,
+            civil_status: editFormData.civilStatus,
+            nationality: editFormData.nationality,
+            region: editFormData.region,
+            father_suffix: editFormData.fatherSuffix,
+            mother_suffix: editFormData.motherMaidenSuffix,
+          },
+        },
+      });
+      if (!response?.success || !response.vault)
+        throw new Error(response?.error || 'Details could not be saved.');
+      setVault(response.vault);
+      setEditFormData(response.vault);
+      setIsEditing(false);
+      setIsOnline(true);
+      flash({ text: 'Details saved and synchronized with GovGuide PH.', type: 'success' }, 3000);
+    } catch (error) {
+      flash(
+        {
+          text:
+            error instanceof Error ? error.message : 'Unable to save. Your edits are still open.',
+          type: 'warning',
+        },
+        6000,
+      );
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -435,17 +519,21 @@ export function App() {
       onToken: (token) => {
         accumulatedContent += token;
         setChatMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgId ? { ...m, content: accumulatedContent } : m))
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, content: accumulatedContent } : m)),
         );
       },
       onSources: (sources) => {
         setChatMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgId ? { ...m, sources } : m))
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, sources } : m)),
         );
       },
       onGuardrailBlocked: (category) => {
         setChatMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgId ? { ...m, guardrailBlocked: true, guardrailCategory: category as any } : m))
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, guardrailBlocked: true, guardrailCategory: category as any }
+              : m,
+          ),
         );
       },
       onDone: () => {
@@ -485,7 +573,7 @@ export function App() {
   const pushRequestUpdate = (
     payload: { processStatus?: ProcessStatus; note?: string; appointmentSchedule?: string },
     onDone: (ok: boolean) => void,
-    successText: string
+    successText: string,
   ) => {
     if (!selectedReq) return;
     chrome.runtime.sendMessage(
@@ -506,10 +594,13 @@ export function App() {
           flash({ text: successText, type: 'success' }, 4000);
           onDone(true);
         } else {
-          flash({ text: `Error: ${res?.error || 'Failed to update request'}`, type: 'error' }, 4500);
+          flash(
+            { text: `Error: ${res?.error || 'Failed to update request'}`, type: 'error' },
+            4500,
+          );
           onDone(false);
         }
-      }
+      },
     );
   };
 
@@ -522,7 +613,7 @@ export function App() {
         setIsAddingNote(false);
         if (ok) setNoteDraft('');
       },
-      `Note added to ${selectedReq.id}.`
+      `Note added to ${selectedReq.id}.`,
     );
   };
 
@@ -538,7 +629,7 @@ export function App() {
         setIsUpdating(false);
         if (ok) setNoteDraft('');
       },
-      `${selectedReq.id} set to ${processLabel(processStatus)}. Citizen notified.`
+      `${selectedReq.id} set to ${processLabel(processStatus)}. Citizen notified.`,
     );
   };
 
@@ -560,7 +651,10 @@ export function App() {
     setAiLetterDraft(result.letterText);
     setProcessStatus(result.suggestedStatus);
     setAiIsEditingLetter(false);
-    flash({ text: `Drafted official letter for ${selectedReq.citizenName}.`, type: 'success' }, 3000);
+    flash(
+      { text: `Drafted official letter for ${selectedReq.citizenName}.`, type: 'success' },
+      3000,
+    );
   };
 
   const handleSendAiLetter = () => {
@@ -570,16 +664,23 @@ export function App() {
       {
         processStatus: aiGeneratedLetter?.suggestedStatus || processStatus,
         note: aiLetterDraft,
-        appointmentSchedule: aiGeneratedLetter?.appointmentSchedule || selectedReq.appointmentSchedule,
+        appointmentSchedule:
+          aiGeneratedLetter?.appointmentSchedule || selectedReq.appointmentSchedule,
       },
       (ok) => {
         setIsUpdating(false);
         if (ok) {
           setAiKeywords('');
-          flash({ text: `Official email letter dispatched to ${selectedReq.citizenName}'s notifications!`, type: 'success' }, 4500);
+          flash(
+            {
+              text: `Official email letter dispatched to ${selectedReq.citizenName}'s notifications!`,
+              type: 'success',
+            },
+            4500,
+          );
         }
       },
-      `Official email letter sent directly to ${selectedReq.citizenName}'s notifications!`
+      `Official email letter sent directly to ${selectedReq.citizenName}'s notifications!`,
     );
   };
 
@@ -633,8 +734,13 @@ export function App() {
 
       {isAuthed && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className={`role-pill-btn ${isAgency ? 'agency' : 'citizen'}`} style={{ cursor: 'default' }}>
-            {isAgency ? `Agency${session?.agencyCode ? ` · ${session.agencyCode}` : ''}` : 'Citizen'}
+          <span
+            className={`role-pill-btn ${isAgency ? 'agency' : 'citizen'}`}
+            style={{ cursor: 'default' }}
+          >
+            {isAgency
+              ? `Agency${session?.agencyCode ? ` · ${session.agencyCode}` : ''}`
+              : 'Citizen'}
           </span>
           <button onClick={handleLogout} className="signout-btn" title="Sign out">
             Sign out
@@ -650,7 +756,13 @@ export function App() {
       <button
         onClick={() => setStatusMsg(null)}
         aria-label="Dismiss"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.7 }}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 14,
+          opacity: 0.7,
+        }}
       >
         ×
       </button>
@@ -668,7 +780,9 @@ export function App() {
             <div className="login-subtitle">Use your GovGuide PH citizen or agency account.</div>
 
             <div className="form-group" style={{ marginTop: 12 }}>
-              <label className="form-label" htmlFor="login-email">Email</label>
+              <label className="form-label" htmlFor="login-email">
+                Email
+              </label>
               <input
                 id="login-email"
                 type="email"
@@ -680,7 +794,9 @@ export function App() {
               />
             </div>
             <div className="form-group" style={{ marginTop: 8 }}>
-              <label className="form-label" htmlFor="login-password">Password</label>
+              <label className="form-label" htmlFor="login-password">
+                Password
+              </label>
               <input
                 id="login-password"
                 type="password"
@@ -693,13 +809,25 @@ export function App() {
 
             {loginError && <div className="login-error">{loginError}</div>}
 
-            <button type="submit" className="btn-autofill" disabled={loggingIn} style={{ width: '100%', marginTop: 14 }}>
+            <button
+              type="submit"
+              className="btn-autofill"
+              disabled={loggingIn}
+              style={{ width: '100%', marginTop: 14 }}
+            >
               {loggingIn ? 'Signing in...' : 'Sign in'}
             </button>
 
-            <div className="login-divider"><span>or</span></div>
+            <div className="login-divider">
+              <span>or</span>
+            </div>
 
-            <button type="button" className="btn-sync" onClick={handleOpenWebLogin} style={{ width: '100%' }}>
+            <button
+              type="button"
+              className="btn-sync"
+              onClick={handleOpenWebLogin}
+              style={{ width: '100%' }}
+            >
               Sign in on GovGuide PH web portal
             </button>
             <p className="login-hint">
@@ -721,7 +849,11 @@ export function App() {
         <div className="tab-content">
           {/* Search */}
           <div className="vault-card">
-            <label className="form-label" htmlFor="agency-search" style={{ display: 'block', marginBottom: 6, fontSize: 11 }}>
+            <label
+              className="form-label"
+              htmlFor="agency-search"
+              style={{ display: 'block', marginBottom: 6, fontSize: 11 }}
+            >
               Search Citizen Applications
             </label>
             <div className="search-wrap">
@@ -740,7 +872,9 @@ export function App() {
             <div className="request-results">
               {requests.length === 0 && !searching ? (
                 <div className="empty-results">
-                  {searchQuery ? `No applications match "${searchQuery}".` : 'No applications found for your agency.'}
+                  {searchQuery
+                    ? `No applications match "${searchQuery}".`
+                    : 'No applications found for your agency.'}
                 </div>
               ) : (
                 requests.map((r) => (
@@ -753,7 +887,9 @@ export function App() {
                     <div className="request-row-top">
                       <span className="agency-code-chip">{r.agencyCode}</span>
                       <span className="request-ref">{r.referenceNumber}</span>
-                      <span className={`process-pill ${r.processStatus}`}>{processLabel(r.processStatus)}</span>
+                      <span className={`process-pill ${r.processStatus}`}>
+                        {processLabel(r.processStatus)}
+                      </span>
                     </div>
                     <div className="request-row-name">{r.citizenName}</div>
                     <div className="request-row-service">{r.serviceTitle}</div>
@@ -773,14 +909,18 @@ export function App() {
                     {selectedReq.serviceTitle} · Ref {selectedReq.referenceNumber}
                   </div>
                 </div>
-                <span className={`process-pill ${selectedReq.processStatus}`}>{processLabel(selectedReq.processStatus)}</span>
+                <span className={`process-pill ${selectedReq.processStatus}`}>
+                  {processLabel(selectedReq.processStatus)}
+                </span>
               </div>
 
               {/* Status bar */}
               <span className="section-label">Status</span>
               <div className="status-bar" role="radiogroup" aria-label="Application status">
                 {PROCESS_STATUS_OPTIONS.map((opt, i) => {
-                  const activeIdx = PROCESS_STATUS_OPTIONS.findIndex((o) => o.value === processStatus);
+                  const activeIdx = PROCESS_STATUS_OPTIONS.findIndex(
+                    (o) => o.value === processStatus,
+                  );
                   const isActive = opt.value === processStatus;
                   return (
                     <button
@@ -802,14 +942,20 @@ export function App() {
               {/* AI Chatbot: Keyword-to-Official Letter Engine */}
               <div className="agency-ai-card">
                 <div className="agency-ai-header">
-                  <div className="agency-ai-title">
-                    AI Notice Drafter (Keywords → Letter)
-                  </div>
+                  <div className="agency-ai-title">AI Notice Drafter (Keywords → Letter)</div>
                   <span className="agency-ai-badge">RA 11032 Grounded</span>
                 </div>
 
-                <p style={{ fontSize: '10.5px', color: '#64748b', margin: '0 0 8px 0', lineHeight: 1.35 }}>
-                  Enter keywords or counter notes. AI generates a standardized Citizen&apos;s Charter notice sent directly to the citizen&apos;s notifications &amp; email.
+                <p
+                  style={{
+                    fontSize: '10.5px',
+                    color: '#64748b',
+                    margin: '0 0 8px 0',
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Enter keywords or counter notes. AI generates a standardized Citizen&apos;s
+                  Charter notice sent directly to the citizen&apos;s notifications &amp; email.
                 </p>
 
                 {/* Preset Keywords */}
@@ -829,7 +975,9 @@ export function App() {
                     className="keyword-chip"
                     onClick={() => {
                       setAiKeywords('appointment scheduled Counter 3 Nov 10 10:00 AM biometrics');
-                      handleDraftLetter('appointment scheduled Counter 3 Nov 10 10:00 AM biometrics');
+                      handleDraftLetter(
+                        'appointment scheduled Counter 3 Nov 10 10:00 AM biometrics',
+                      );
                     }}
                   >
                     Counter Biometrics
@@ -838,8 +986,12 @@ export function App() {
                     type="button"
                     className="keyword-chip"
                     onClick={() => {
-                      setAiKeywords('unreadable PSA record, submit birth cert with clear registry number');
-                      handleDraftLetter('unreadable PSA record, submit birth cert with clear registry number');
+                      setAiKeywords(
+                        'unreadable PSA record, submit birth cert with clear registry number',
+                      );
+                      handleDraftLetter(
+                        'unreadable PSA record, submit birth cert with clear registry number',
+                      );
                     }}
                   >
                     PSA Record Issue
@@ -848,8 +1000,12 @@ export function App() {
                     type="button"
                     className="keyword-chip"
                     onClick={() => {
-                      setAiKeywords('approved and printed, ready for pick up at counter or courier delivery');
-                      handleDraftLetter('approved and printed, ready for pick up at counter or courier delivery');
+                      setAiKeywords(
+                        'approved and printed, ready for pick up at counter or courier delivery',
+                      );
+                      handleDraftLetter(
+                        'approved and printed, ready for pick up at counter or courier delivery',
+                      );
                     }}
                   >
                     Ready for Release
@@ -887,11 +1043,15 @@ export function App() {
                   <div className="official-letter-card">
                     <div className="official-letter-header">
                       <div className="letterhead-title">{aiGeneratedLetter.agency}</div>
-                      <div className="letterhead-sub">REPUBLIC OF THE PHILIPPINES · CITIZEN&apos;S CHARTER NOTICE</div>
+                      <div className="letterhead-sub">
+                        REPUBLIC OF THE PHILIPPINES · CITIZEN&apos;S CHARTER NOTICE
+                      </div>
                     </div>
 
                     <div className="official-letter-meta">
-                      <span>Ref: <strong>{selectedReq.referenceNumber}</strong></span>
+                      <span>
+                        Ref: <strong>{selectedReq.referenceNumber}</strong>
+                      </span>
                       <span>Date: {aiGeneratedLetter.date}</span>
                     </div>
 
@@ -914,9 +1074,7 @@ export function App() {
                         }}
                       />
                     ) : (
-                      <div className="official-letter-body">
-                        {aiLetterDraft}
-                      </div>
+                      <div className="official-letter-body">{aiLetterDraft}</div>
                     )}
 
                     <div className="letter-action-row">
@@ -951,7 +1109,9 @@ export function App() {
               </div>
 
               {/* Notes */}
-              <span className="section-label" style={{ marginTop: 12 }}>Notes</span>
+              <span className="section-label" style={{ marginTop: 12 }}>
+                Notes
+              </span>
               {selectedReq.notes && selectedReq.notes.length > 0 ? (
                 <div className="notes-list">
                   {[...selectedReq.notes].reverse().map((n) => (
@@ -965,7 +1125,9 @@ export function App() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-results" style={{ padding: '6px 0' }}>No notes yet.</div>
+                <div className="empty-results" style={{ padding: '6px 0' }}>
+                  No notes yet.
+                </div>
               )}
 
               <textarea
@@ -1041,19 +1203,31 @@ export function App() {
 
             {/* Profile Card */}
             <div className="vault-card">
-              <div className={`card-header-row ${!isProfileExpanded && !isEditing ? 'collapsed' : ''}`}>
+              <div
+                className={`card-header-row ${!isProfileExpanded && !isEditing ? 'collapsed' : ''}`}
+              >
                 <div
                   className="card-header-left clickable"
                   onClick={() => setIsProfileExpanded(!isProfileExpanded)}
-                  title={isProfileExpanded ? 'Click to collapse details' : 'Click to expand details'}
+                  title={
+                    isProfileExpanded ? 'Click to collapse details' : 'Click to expand details'
+                  }
                 >
                   <div className="avatar-initials">{getInitials(vault)}</div>
                   <div>
                     <div className="card-title-name">
-                      {[vault.firstName, vault.middleName, vault.lastName, vault.suffix].filter(Boolean).join(' ') || 'Citizen Applicant'}
+                      {[vault.firstName, vault.middleName, vault.lastName, vault.suffix]
+                        .filter(Boolean)
+                        .join(' ') || 'Citizen Applicant'}
                     </div>
                     <div className="card-title-sub">
-                      {[vault.civilStatus, vault.gender, vault.dateOfBirth ? `Born ${vault.dateOfBirth}` : ''].filter(Boolean).join(' · ')}
+                      {[
+                        vault.civilStatus,
+                        vault.gender,
+                        vault.dateOfBirth ? `Born ${vault.dateOfBirth}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </div>
                   </div>
                 </div>
@@ -1102,152 +1276,205 @@ export function App() {
               {(isProfileExpanded || isEditing) && (
                 <>
                   {!isEditing ? (
-                <>
-                  {/* Identity Grid */}
-                  <div className="info-grid">
-                    <div className="info-item">
-                      <span className="info-label">Place of Birth</span>
-                      <span className="info-val">{vault.placeOfBirth || 'Not specified'}</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Nationality</span>
-                      <span className="info-val">{vault.nationality || 'FILIPINO'}</span>
-                    </div>
-                  </div>
-
-                  {/* Civil Registry & Parents Section (PSA & NBI Essential) */}
-                  <div className="detail-group">
-                    <div className="group-title">
-                      <span>Civil Registry &amp; Parents (PSA / NBI Essential)</span>
-                    </div>
-                    <div className="info-grid">
-                      <div className="info-item info-col-span">
-                        <span className="info-label">Mother&apos;s Maiden Name (Crucial for PSA Birth Certificate)</span>
-                        <span className="info-val highlight">
-                          {[vault.motherMaidenFirstName, vault.motherMaidenMiddleName, vault.motherMaidenLastName, vault.motherMaidenSuffix].filter(Boolean).join(' ') || 'Not specified'}
-                        </span>
-                        <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
-                          First: {vault.motherMaidenFirstName || '—'} · Mid: {vault.motherMaidenMiddleName || '—'} · Last: {vault.motherMaidenLastName || '—'}
+                    <>
+                      {/* Identity Grid */}
+                      <div className="info-grid">
+                        <div className="info-item">
+                          <span className="info-label">Place of Birth</span>
+                          <span className="info-val">{vault.placeOfBirth || 'Not specified'}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="info-label">Nationality</span>
+                          <span className="info-val">{vault.nationality || 'FILIPINO'}</span>
                         </div>
                       </div>
 
-                      <div className="info-item info-col-span">
-                        <span className="info-label">Father&apos;s Full Name</span>
-                        <span className="info-val">
-                          {[vault.fatherFirstName, vault.fatherMiddleName, vault.fatherLastName, vault.fatherSuffix].filter(Boolean).join(' ') || vault.fatherFullName || 'Not specified'}
-                        </span>
-                        <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
-                          First: {vault.fatherFirstName || '—'} · Mid: {vault.fatherMiddleName || '—'} · Last: {vault.fatherLastName || '—'}
+                      {/* Civil Registry & Parents Section (PSA & NBI Essential) */}
+                      <div className="detail-group">
+                        <div className="group-title">
+                          <span>Civil Registry &amp; Parents (PSA / NBI Essential)</span>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Philippine Government IDs (with 1-Click Copy Chips) */}
-                  <div className="detail-group">
-                    <div className="group-title">
-                      <span>Government Identifiers (1-Click Copy)</span>
-                    </div>
-                    <div className="id-chips-grid">
-                      {[
-                        { key: 'philsys', label: 'PhilSys National ID', val: vault.philsysId },
-                        { key: 'philhealth', label: 'PhilHealth PIN', val: vault.philhealthNumber },
-                        { key: 'tin', label: 'BIR TIN', val: vault.tin },
-                        { key: 'sss', label: 'SSS Number / CRN', val: vault.sssNumber },
-                        { key: 'pagibig', label: 'Pag-IBIG MID', val: vault.pagibigMid },
-                        { key: 'passport', label: 'DFA Passport No.', val: vault.passportNumber },
-                      ].map((id) => (
-                        <div key={id.key} className="id-card-item">
-                          <div className="id-card-text">
-                            <div className="id-card-label">{id.label}</div>
-                            <div className="id-card-val">{id.val || '—'}</div>
+                        <div className="info-grid">
+                          <div className="info-item info-col-span">
+                            <span className="info-label">
+                              Mother&apos;s Maiden Name (Crucial for PSA Birth Certificate)
+                            </span>
+                            <span className="info-val highlight">
+                              {[
+                                vault.motherMaidenFirstName,
+                                vault.motherMaidenMiddleName,
+                                vault.motherMaidenLastName,
+                                vault.motherMaidenSuffix,
+                              ]
+                                .filter(Boolean)
+                                .join(' ') || 'Not specified'}
+                            </span>
+                            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
+                              First: {vault.motherMaidenFirstName || '—'} · Mid:{' '}
+                              {vault.motherMaidenMiddleName || '—'} · Last:{' '}
+                              {vault.motherMaidenLastName || '—'}
+                            </div>
                           </div>
-                          {id.val && (
-                            <button
-                              onClick={() => handleCopyText(id.key, id.val)}
-                              className={`copy-mini-btn ${copiedKey === id.key ? 'copied' : ''}`}
-                              title={`Copy ${id.label}`}
-                            >
-                              {copiedKey === id.key ? 'Copied' : 'Copy'}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  {/* Contact & Address Section */}
-                  <div className="detail-group">
-                    <div className="group-title">
-                      <span>Contact &amp; Philippine Delivery Address</span>
-                    </div>
-                    <div className="info-grid">
-                      <div className="info-item">
-                        <span className="info-label">Mobile Phone</span>
-                        <span className="info-val">{vault.mobileNumber || '—'}</span>
-                      </div>
-                      <div className="info-item">
-                        <span className="info-label">Email Address</span>
-                        <span className="info-val" style={{ fontSize: 10.5 }}>{vault.emailAddress || '—'}</span>
-                      </div>
-                      <div className="info-item info-col-span">
-                        <span className="info-label">Residential Address</span>
-                        <span className="info-val">
-                          {[vault.streetHouseNumber, vault.barangay, vault.cityMunicipality, vault.province, vault.zipCode].filter(Boolean).join(', ') || 'Not specified'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* Edit Mode Form */
-                editFormData && (
-                  <div style={{ marginTop: 10 }}>
-                    <div className="edit-form-grid">
-                      {(
-                        [
-                          { field: 'firstName', label: 'First Name' },
-                          { field: 'middleName', label: 'Middle Name' },
-                          { field: 'lastName', label: 'Last Name' },
-                          { field: 'dateOfBirth', label: 'Date of Birth (YYYY-MM-DD)' },
-                          { field: 'motherMaidenFirstName', label: "Mother's Maiden First Name", span: true },
-                          { field: 'motherMaidenMiddleName', label: "Mother's Maiden Middle" },
-                          { field: 'motherMaidenLastName', label: "Mother's Maiden Last" },
-                          { field: 'fatherFirstName', label: "Father's First Name" },
-                          { field: 'fatherLastName', label: "Father's Last Name" },
-                          { field: 'philsysId', label: 'PhilSys National ID' },
-                          { field: 'philhealthNumber', label: 'PhilHealth PIN' },
-                          { field: 'tin', label: 'BIR TIN' },
-                          { field: 'sssNumber', label: 'SSS Number' },
-                          { field: 'mobileNumber', label: 'Mobile Number', span: true },
-                          { field: 'streetHouseNumber', label: 'Street / Unit / House No.', span: true },
-                          { field: 'barangay', label: 'Barangay' },
-                          { field: 'cityMunicipality', label: 'City / Municipality' },
-                        ] as { field: keyof CitizenVaultData; label: string; span?: boolean }[]
-                      ).map(({ field, label, span }) => (
-                        <div key={field} className={`form-group ${span ? 'col-span-2' : ''}`}>
-                          <label className="form-label">{label}</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={(editFormData[field] as string) || ''}
-                            onChange={(e) => setEditFormData({ ...editFormData, [field]: e.target.value })}
-                          />
+                          <div className="info-item info-col-span">
+                            <span className="info-label">Father&apos;s Full Name</span>
+                            <span className="info-val">
+                              {[
+                                vault.fatherFirstName,
+                                vault.fatherMiddleName,
+                                vault.fatherLastName,
+                                vault.fatherSuffix,
+                              ]
+                                .filter(Boolean)
+                                .join(' ') ||
+                                vault.fatherFullName ||
+                                'Not specified'}
+                            </span>
+                            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
+                              First: {vault.fatherFirstName || '—'} · Mid:{' '}
+                              {vault.fatherMiddleName || '—'} · Last: {vault.fatherLastName || '—'}
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
 
-                    <div className="edit-action-bar">
-                      <button onClick={handleSaveEditForm} className="btn-save">
-                        Save &amp; Sync Details
-                      </button>
-                      <button onClick={() => setIsEditing(false)} className="btn-cancel">
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
+                      {/* Philippine Government IDs (with 1-Click Copy Chips) */}
+                      <div className="detail-group">
+                        <div className="group-title">
+                          <span>Government Identifiers (1-Click Copy)</span>
+                        </div>
+                        <div className="id-chips-grid">
+                          {[
+                            { key: 'philsys', label: 'PhilSys National ID', val: vault.philsysId },
+                            {
+                              key: 'philhealth',
+                              label: 'PhilHealth PIN',
+                              val: vault.philhealthNumber,
+                            },
+                            { key: 'tin', label: 'BIR TIN', val: vault.tin },
+                            { key: 'sss', label: 'SSS Number / CRN', val: vault.sssNumber },
+                            { key: 'pagibig', label: 'Pag-IBIG MID', val: vault.pagibigMid },
+                            {
+                              key: 'passport',
+                              label: 'DFA Passport No.',
+                              val: vault.passportNumber,
+                            },
+                          ].map((id) => (
+                            <div key={id.key} className="id-card-item">
+                              <div className="id-card-text">
+                                <div className="id-card-label">{id.label}</div>
+                                <div className="id-card-val">{id.val || '—'}</div>
+                              </div>
+                              {id.val && (
+                                <button
+                                  onClick={() => handleCopyText(id.key, id.val)}
+                                  className={`copy-mini-btn ${copiedKey === id.key ? 'copied' : ''}`}
+                                  title={`Copy ${id.label}`}
+                                >
+                                  {copiedKey === id.key ? 'Copied' : 'Copy'}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Contact & Address Section */}
+                      <div className="detail-group">
+                        <div className="group-title">
+                          <span>Contact &amp; Philippine Delivery Address</span>
+                        </div>
+                        <div className="info-grid">
+                          <div className="info-item">
+                            <span className="info-label">Mobile Phone</span>
+                            <span className="info-val">{vault.mobileNumber || '—'}</span>
+                          </div>
+                          <div className="info-item">
+                            <span className="info-label">Email Address</span>
+                            <span className="info-val" style={{ fontSize: 10.5 }}>
+                              {vault.emailAddress || '—'}
+                            </span>
+                          </div>
+                          <div className="info-item info-col-span">
+                            <span className="info-label">Residential Address</span>
+                            <span className="info-val">
+                              {[
+                                vault.streetHouseNumber,
+                                vault.barangay,
+                                vault.cityMunicipality,
+                                vault.province,
+                                vault.zipCode,
+                              ]
+                                .filter(Boolean)
+                                .join(', ') || 'Not specified'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* Edit Mode Form */
+                    editFormData && (
+                      <div style={{ marginTop: 10 }}>
+                        <div className="edit-form-grid">
+                          {(
+                            [
+                              { field: 'firstName', label: 'First Name' },
+                              { field: 'middleName', label: 'Middle Name' },
+                              { field: 'lastName', label: 'Last Name' },
+                              { field: 'dateOfBirth', label: 'Date of Birth (YYYY-MM-DD)' },
+                              {
+                                field: 'motherMaidenFirstName',
+                                label: "Mother's Maiden First Name",
+                                span: true,
+                              },
+                              { field: 'motherMaidenMiddleName', label: "Mother's Maiden Middle" },
+                              { field: 'motherMaidenLastName', label: "Mother's Maiden Last" },
+                              { field: 'fatherFirstName', label: "Father's First Name" },
+                              { field: 'fatherLastName', label: "Father's Last Name" },
+                              { field: 'philsysId', label: 'PhilSys National ID' },
+                              { field: 'philhealthNumber', label: 'PhilHealth PIN' },
+                              { field: 'tin', label: 'BIR TIN' },
+                              { field: 'sssNumber', label: 'SSS Number' },
+                              { field: 'mobileNumber', label: 'Mobile Number', span: true },
+                              {
+                                field: 'streetHouseNumber',
+                                label: 'Street / Unit / House No.',
+                                span: true,
+                              },
+                              { field: 'barangay', label: 'Barangay' },
+                              { field: 'cityMunicipality', label: 'City / Municipality' },
+                            ] as { field: keyof CitizenVaultData; label: string; span?: boolean }[]
+                          ).map(({ field, label, span }) => (
+                            <div key={field} className={`form-group ${span ? 'col-span-2' : ''}`}>
+                              <label className="form-label">{label}</label>
+                              <input
+                                type="text"
+                                className="form-input"
+                                value={(editFormData[field] as string) || ''}
+                                onChange={(e) =>
+                                  setEditFormData({ ...editFormData, [field]: e.target.value })
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="edit-action-bar">
+                          <button
+                            onClick={handleSaveEditForm}
+                            disabled={syncing}
+                            className="btn-save"
+                          >
+                            Save &amp; Sync Details
+                          </button>
+                          <button onClick={() => setIsEditing(false)} className="btn-cancel">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </>
               )}
             </div>
@@ -1255,9 +1482,7 @@ export function App() {
             {/* Citizen Mini Chatbot (Embedded RAG & RA 11032 Guardrails) */}
             <div className="citizen-mini-chat-card">
               <div className="mini-chat-header">
-                <div className="mini-chat-title">
-                  GovGuidePH ChatBot
-                </div>
+                <div className="mini-chat-title">GovGuidePH ChatBot</div>
                 <div>
                   <button
                     type="button"
@@ -1266,7 +1491,16 @@ export function App() {
                     title="Clear chat history"
                     aria-label="Clear chat"
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </button>
@@ -1278,22 +1512,38 @@ export function App() {
                 {chatMessages.map((msg) => (
                   <div key={msg.id} className={`mini-chat-bubble ${msg.role}`}>
                     <div className="mini-chat-content">
-                      {msg.content || (isChatLoading && msg.role === 'assistant' ? 'Thinking...' : '')}
+                      {msg.content ||
+                        (isChatLoading && msg.role === 'assistant' ? 'Thinking...' : '')}
                     </div>
 
                     {msg.guardrailBlocked && (
                       <div className="mini-guardrail-banner">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
-                        <span>Guardrail Active: {msg.guardrailCategory || 'RA 11032 Anti-Fixer Policy'}</span>
+                        <span>
+                          Guardrail Active: {msg.guardrailCategory || 'RA 11032 Anti-Fixer Policy'}
+                        </span>
                       </div>
                     )}
 
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mini-chat-sources">
                         {msg.sources.map((s, idx) => (
-                          <span key={idx} className="mini-source-chip" title={`${s.service} · ${s.section || ''}`}>
+                          <span
+                            key={idx}
+                            className="mini-source-chip"
+                            title={`${s.service} · ${s.section || ''}`}
+                          >
                             {s.agency}
                           </span>
                         ))}
@@ -1330,7 +1580,16 @@ export function App() {
                   {isChatLoading ? (
                     <span className="spinner spinner-xs" />
                   ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <line x1="22" y1="2" x2="11" y2="13" />
                       <polygon points="22 2 15 22 11 13 2 9 22 2" />
                     </svg>

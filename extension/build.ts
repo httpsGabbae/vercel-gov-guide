@@ -13,6 +13,9 @@ const extDir = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(extDir, 'dist');
 
 function safeCleanDir(targetDir: string) {
+  if (resolve(targetDir) !== resolve(extDir, 'dist')) {
+    throw new Error('Refusing to clean outside extension/dist');
+  }
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
     return;
@@ -20,6 +23,9 @@ function safeCleanDir(targetDir: string) {
   try {
     for (const file of fs.readdirSync(targetDir)) {
       const fullPath = resolve(targetDir, file);
+      if (!fullPath.startsWith(resolve(targetDir) + (process.platform === 'win32' ? '\\' : '/'))) {
+        throw new Error('Build output path escaped extension/dist');
+      }
       try {
         fs.rmSync(fullPath, { recursive: true, force: true });
       } catch {
@@ -94,10 +100,7 @@ async function buildAll() {
 
   // 4. Copy Manifest and Icons
   console.log('[4/4] Copying Manifest V3 and Assets...');
-  fs.copyFileSync(
-    resolve(extDir, 'public/manifest.json'),
-    resolve(distDir, 'manifest.json')
-  );
+  fs.copyFileSync(resolve(extDir, 'public/manifest.json'), resolve(distDir, 'manifest.json'));
 
   const iconsSrcDir = resolve(extDir, 'public/icons');
   const iconsDistDir = resolve(distDir, 'icons');

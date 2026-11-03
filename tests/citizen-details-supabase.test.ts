@@ -49,6 +49,40 @@ beforeEach(() => {
 });
 
 describe('Citizen Details Supabase Persistence API (/api/citizen/details)', () => {
+  it('does not let the extension header read or overwrite another account', async () => {
+    const otherId = PROFILES.married_applicant.id;
+    const headers = { 'x-extension-id': 'govguide-extension', 'Content-Type': 'application/json' };
+    expect(
+      (
+        await GET(
+          new NextRequest(`http://localhost:3000/api/citizen/details?citizenId=${otherId}`, {
+            headers,
+          }),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await POST(
+          new NextRequest('http://localhost:3000/api/citizen/details', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ citizenId: otherId, applicant: PROFILES.married_applicant }),
+          }),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await DELETE(
+          new NextRequest(`http://localhost:3000/api/citizen/details?citizenId=${otherId}`, {
+            method: 'DELETE',
+            headers,
+          }),
+        )
+      ).status,
+    ).toBe(403);
+  });
   const testCitizenId = PROFILES.jobseeker.id;
 
   it('hydrates citizen details directly from Supabase profiles', async () => {

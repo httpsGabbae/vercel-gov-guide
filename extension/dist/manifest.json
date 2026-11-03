@@ -1,15 +1,9 @@
 {
   "manifest_version": 3,
   "name": "GovGuide PH — Bilis-Pila & Counter Bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Smart Philippine government portal autofill & real-time Citizen Charter application status updates.",
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting",
-    "notifications",
-    "contextMenus"
-  ],
+  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus"],
   "host_permissions": [
     "https://*.gov.ph/*",
     "https://*.psahelpline.ph/*",
@@ -17,7 +11,8 @@
     "https://*.psaserbilis.com.ph/*",
     "https://*.serbilis.com.ph/*",
     "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
+    "http://127.0.0.1:*/*",
+    "https://*.govguide.ph/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -34,10 +29,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://*/*",
-        "http://*/*"
-      ],
+      "matches": ["https://*/*", "http://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

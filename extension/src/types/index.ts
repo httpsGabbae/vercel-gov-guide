@@ -158,26 +158,46 @@ export interface ExtensionSession {
 
 // Background & Content Script messaging actions
 export type ExtensionMessage =
+  | { type: 'CLEAR_WEB_DETAILS'; payload?: { apiBaseUrl?: string } }
+  | {
+      type: 'REQUEST_WEB_DETAILS';
+      payload: { userId?: string; applicant?: Record<string, unknown> };
+    }
+  | { type: 'SAVE_WEB_DETAILS'; payload: { applicant: Record<string, unknown> } }
   | { type: 'GET_VAULT' }
   | { type: 'SAVE_VAULT'; payload: { vault: CitizenVaultData; pin?: string } }
   | { type: 'SYNC_FROM_GOVGUIDE'; payload?: { citizenId?: string } }
-  | { type: 'PUSH_VAULT_FROM_WEB'; payload: { applicant: any; citizenId?: string; apiBaseUrl?: string } }
+  | {
+      type: 'PUSH_VAULT_FROM_WEB';
+      payload: { applicant: any; citizenId?: string; apiBaseUrl?: string };
+    }
   | { type: 'VAULT_UPDATED'; vault: CitizenVaultData }
   | { type: 'GET_SESSION' }
   | { type: 'SET_SESSION'; payload: Partial<ExtensionSession> }
   | { type: 'TRIGGER_AUTOFILL'; payload: { fields: DetectedField[] } }
   | { type: 'LOGIN'; payload: { email: string; password: string } }
   | { type: 'LOGOUT' }
-  | { type: 'SYNC_WEB_AUTH'; payload: { accessToken?: string; refreshToken?: string; signedOut?: boolean } }
+  | {
+      type: 'SYNC_WEB_AUTH';
+      payload: {
+        accessToken?: string;
+        refreshToken?: string;
+        signedOut?: boolean;
+        apiBaseUrl?: string;
+      };
+    }
   | { type: 'SESSION_UPDATED'; session: ExtensionSession }
   | { type: 'FETCH_AGENCY_REQUESTS'; payload?: { q?: string } }
-  | { type: 'UPDATE_REQUEST_STATUS'; payload: {
-      requestId: string;
-      processStatus?: ProcessStatus;
-      officerName?: string;
-      note?: string;
-      appointmentSchedule?: string;
-    } }
+  | {
+      type: 'UPDATE_REQUEST_STATUS';
+      payload: {
+        requestId: string;
+        processStatus?: ProcessStatus;
+        officerName?: string;
+        note?: string;
+        appointmentSchedule?: string;
+      };
+    }
   | { type: 'DETECT_FIELDS_REQUEST' }
   | { type: 'FIELDS_DETECTED'; payload: DetectionSummary }
   | { type: 'DETECTED_REFERENCE_NUMBER'; payload: { referenceNumber: string; agencyCode?: string } }

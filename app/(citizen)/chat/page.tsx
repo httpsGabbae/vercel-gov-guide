@@ -1374,7 +1374,7 @@ function InteractiveChecklistCard({
                       Step {stepNum}
                     </span>
                     <span
-                      className={`text-xs sm:text-[13px] font-semibold truncate ${
+                      className={`text-xs sm:text-[13px] font-semibold break-words ${
                         isDone
                           ? 'text-slate-400 line-through'
                           : isSkipped
@@ -1401,7 +1401,7 @@ function InteractiveChecklistCard({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => toggleChecklistItem(item.id)}
@@ -2971,6 +2971,7 @@ export default function CitizenChatPage() {
 
   useEffect(() => {
     const locked = () => {
+      window.postMessage({ type: 'GOVGUIDE_DETAILS_LOCKED' }, window.location.origin);
       setDetailsReady(false);
       setSavedFiles([]);
       setInspections([]);
@@ -3258,6 +3259,49 @@ export default function CitizenChatPage() {
       window.removeEventListener('focus', checkAgencyUpdates);
     };
   }, [authUser, applicant.id, activeThreadId]);
+
+  // Extension requests use this tab's authenticated, PIN-unlocked details session.
+  useEffect(() => {
+    const receive = async (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin || event.data?.type !== 'GOVGUIDE_DETAILS_REQUEST') return;
+      const { requestId, userId, applicant: patch } = event.data;
+      if (typeof requestId !== 'string') return;
+      const respond = (result: Record<string, unknown>) => window.postMessage({ type: 'GOVGUIDE_DETAILS_RESPONSE', requestId, ...result }, window.location.origin);
+      if (!authUser || !detailsReady || !hasDetailsAccess(authUser.id) || applicant.id !== authUser.id) {
+        respond({ error: 'Sign in and unlock My Details in this GovGuide tab before syncing.' });
+        return;
+      }
+      if (userId && userId !== authUser.id) {
+        respond({ error: 'This tab belongs to another account. Open My Details for the extension account.' });
+        return;
+      }
+      try {
+        const next = { ...applicant };
+        if (patch && typeof patch === 'object') {
+          const fields = ['first_name', 'middle_name', 'last_name', 'suffix', 'display_name', 'gender', 'birth_date', 'place_of_birth', 'civil_status', 'nationality', 'father_name', 'father_first_name', 'father_middle_name', 'father_last_name', 'father_suffix', 'mother_maiden_name', 'mother_first_name', 'mother_middle_name', 'mother_last_name', 'mother_suffix', 'philsys_id', 'philsys_card_number', 'philhealth_number', 'tin', 'tin_number', 'sss_number', 'pagibig_number', 'passport_number', 'region', 'street_address', 'barangay', 'city', 'province', 'zip_code', 'phone', 'contact_number', 'email'];
+          for (const field of fields) {
+            if (typeof patch[field] === 'string') Object.assign(next, { [field]: patch[field] });
+          }
+          const response = await detailsFetch('/api/citizen/details', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citizenId: authUser.id, applicant: next, savedFiles, checklistItems, inspections }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.message || 'Could not save My Details.');
+          if (!hasDetailsAccess(authUser.id)) throw new Error('My Details locked during sync. Unlock and try again.');
+          setApplicant(next);
+        }
+        respond({ success: true, applicant: next });
+      } catch (error) {
+        respond({ error: error instanceof Error ? error.message : 'Unable to sync My Details.' });
+      }
+    };
+    window.addEventListener('message', receive);
+    if (authUser && detailsReady && hasDetailsAccess(authUser.id) && applicant.id === authUser.id) {
+      window.postMessage({ type: 'GOVGUIDE_MY_DETAILS_UPDATED', applicant, citizenId: authUser.id }, window.location.origin);
+    }
+    return () => window.removeEventListener('message', receive);
+  }, [authUser, detailsReady, applicant, savedFiles, checklistItems, inspections]);
 
   // Save only after the protected details payload has been loaded.
   useEffect(() => {

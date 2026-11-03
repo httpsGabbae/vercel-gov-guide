@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, AlertCircle, Receipt, ArrowRight, FastForward } from 'lucide-react';
+import { CheckCircle2, AlertCircle, PencilLine, FastForward } from 'lucide-react';
 
 export interface ChecklistItem {
   name: string;
@@ -32,14 +32,10 @@ export function ChecklistCard({
   onOpenStepInChat,
 }: ChecklistCardProps) {
   const [checkedIndices, setCheckedIndices] = useState<number[]>(() =>
-    requirements
-      .map((r, idx) => (r.status === 'verified' ? idx : -1))
-      .filter((i) => i >= 0),
+    requirements.map((r, idx) => (r.status === 'verified' ? idx : -1)).filter((i) => i >= 0),
   );
   const [skippedIndices, setSkippedIndices] = useState<number[]>(() =>
-    requirements
-      .map((r, idx) => (r.status === 'skipped' ? idx : -1))
-      .filter((i) => i >= 0),
+    requirements.map((r, idx) => (r.status === 'skipped' ? idx : -1)).filter((i) => i >= 0),
   );
 
   const toggleCheck = (idx: number) => {
@@ -60,92 +56,36 @@ export function ChecklistCard({
 
   const activeTotal = Math.max(1, requirements.length - skippedIndices.length);
   const completed = checkedIndices.filter((i) => !skippedIndices.includes(i)).length;
-  const scorePercent = Math.min(100, Math.round((completed / activeTotal) * 100));
   const totalFee = processingFee + (convenienceFee || 0);
 
   return (
-    <div className="my-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition-all sm:p-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-        <div>
-          <span className="text-[11px] font-bold tracking-wider uppercase text-blue-600">
-            {agencyName}
-          </span>
-          <h4 className="text-sm font-bold text-slate-900 sm:text-base">{serviceName}</h4>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-            <Receipt className="h-3.5 w-3.5" />
-            <span>{totalFee === 0 ? 'LIBRE (₱0.00)' : `₱${totalFee.toFixed(2)}`}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Counter-Readiness Gauge */}
-      <div className="my-3 space-y-1.5">
-        <div className="flex justify-between text-xs font-semibold">
-          <span className="text-slate-600">
-            Pre-Flight Counter Readiness
-          </span>
-          <span
-            className={
-              scorePercent === 100
-                ? 'font-bold text-emerald-600'
-                : scorePercent >= 50
-                  ? 'text-amber-600'
-                  : 'text-slate-500'
-            }
-          >
-            {completed} of {activeTotal} Ready ({scorePercent}%)
-            {skippedIndices.length > 0 && ` · ${skippedIndices.length} Skipped`}
-          </span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={`h-full transition-all duration-300 ${
-              scorePercent === 100
-                ? 'bg-emerald-500'
-                : scorePercent >= 50
-                  ? 'bg-amber-500'
-                  : 'bg-blue-500'
-            }`}
-            style={{ width: `${scorePercent}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Stepping Requirements Checklist */}
-      <div className="pt-2">
-        <p className="mb-3 text-xs font-semibold text-slate-600">
-          Sundin ang bawat step para maging Counter-Ready (i-check o i-skip kung hindi kailangan):
+    <div className="my-3 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all sm:p-5">
+      <div className="-mx-4 -mt-4 border-b border-slate-200 px-4 py-3 sm:-mx-5 sm:-mt-5 sm:px-5">
+        <h4 className="text-base font-semibold text-slate-900">{serviceName}</h4>
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
+          {agencyName} · Fee: {totalFee === 0 ? 'LIBRE (₱0.00)' : '₱' + totalFee.toFixed(2)}
         </p>
-
-        <div className="space-y-0">
+        <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+          {completed} of {activeTotal} Ready
+        </span>
+      </div>
+      <div className="pt-2">
+        <div>
           {requirements.map((req, idx) => {
             const isChecked = checkedIndices.includes(idx);
             const isSkipped = skippedIndices.includes(idx);
             const stepNum = idx + 1;
-            const isLast = idx === requirements.length - 1;
-            const hasError = !isChecked && !isSkipped && Boolean(req.issueNote || req.status === 'issue');
+            const hasError =
+              !isChecked && !isSkipped && Boolean(req.issueNote || req.status === 'issue');
 
             return (
-              <div key={idx} className="relative flex items-start gap-3 pb-4">
-                {/* Vertical Stepper Connector Line */}
-                {!isLast && (
+              <div key={idx} className="relative flex items-start gap-3 pb-3.5">
+                {idx < requirements.length - 1 && (
                   <div
-                    className={`absolute left-[13px] top-[26px] bottom-0 w-[2px] ${
-                      isChecked
-                        ? 'bg-emerald-400'
-                        : isSkipped
-                          ? 'bg-slate-300'
-                          : hasError
-                            ? 'bg-rose-300'
-                            : 'bg-slate-200'
-                    }`}
                     aria-hidden="true"
+                    className="absolute left-[13px] top-7 bottom-0 w-0.5 bg-slate-200"
                   />
                 )}
-
                 {/* Step Indicator Badge */}
                 <button
                   type="button"
@@ -157,10 +97,16 @@ export function ChecklistCard({
                         ? 'bg-slate-200 text-slate-600 border border-slate-300'
                         : hasError
                           ? 'bg-rose-600 text-white shadow-xs ring-4 ring-rose-100'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                          : 'border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                   aria-label={`Toggle step ${stepNum}`}
-                  title={isChecked ? 'Mark as Pending' : isSkipped ? 'Skipped (Click to mark Ready)' : 'Mark as Ready'}
+                  title={
+                    isChecked
+                      ? 'Mark as Pending'
+                      : isSkipped
+                        ? 'Skipped (Click to mark Ready)'
+                        : 'Mark as Ready'
+                  }
                 >
                   {isChecked ? (
                     <CheckCircle2 className="h-4 w-4" />
@@ -175,9 +121,9 @@ export function ChecklistCard({
 
                 {/* Step Body */}
                 <div
-                  className={`flex-1 min-w-0 rounded-xl border p-3 transition-all ${
+                  className={`flex-1 min-w-0 rounded-xl border p-3 break-words transition-all ${
                     hasError
-                      ? 'border-rose-200 bg-rose-50/50'
+                      ? 'border-rose-200 bg-rose-50/60'
                       : isChecked
                         ? 'border-emerald-200 bg-emerald-50/40'
                         : isSkipped
@@ -185,13 +131,13 @@ export function ChecklistCard({
                           : 'border-slate-200 bg-slate-50/60'
                   }`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Step {stepNum}
                       </span>
                       <span
-                        className={`text-xs font-semibold ${
+                        className={`text-sm font-semibold ${
                           isChecked
                             ? 'text-slate-900 line-through opacity-70'
                             : isSkipped
@@ -218,7 +164,7 @@ export function ChecklistCard({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => toggleCheck(idx)}
@@ -237,16 +183,16 @@ export function ChecklistCard({
                         <button
                           type="button"
                           onClick={() => onOpenStepInChat(req.name)}
-                          className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          <span>Chat</span>
-                          <ArrowRight className="h-3 w-3" />
+                          <PencilLine className="h-3.5 w-3.5" />
+                          <span>Open in chat</span>
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <p className="mt-1 text-[11px] text-slate-600 leading-snug">{req.description}</p>
+                  <p className="mt-1 text-sm text-slate-600 leading-relaxed">{req.description}</p>
 
                   {/* Step Error Notice if flagged */}
                   {hasError && req.issueNote && (

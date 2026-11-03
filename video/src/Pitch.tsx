@@ -1,3 +1,18 @@
+import {
+  Product,
+  Opening,
+  Journey,
+  Fragmentation,
+  PlatformReveal,
+  Grounded,
+  DraftTransform,
+  VoiceFlow,
+  ExtensionFocus,
+  ConnectedStatus,
+  ServiceSwitch,
+  ValueVisual,
+  TrustDemo,
+} from "./ProductPitch";
 import React from "react";
 import {
   AbsoluteFill,
@@ -65,7 +80,7 @@ function Reveal({
     </div>
   );
 }
-function FloatingArtifact({ label = "" }: { label?: string }) {
+export function FloatingArtifact({ label = "" }: { label?: string }) {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = f / fps;
@@ -218,7 +233,7 @@ function Frame({
         </div>
       )}
       {children}
-      <FloatingArtifact label={label} />
+
       {source && (
         <div
           style={{
@@ -291,7 +306,7 @@ function Progress() {
   );
 }
 
-function Hook() {
+export function Hook() {
   const f = useCurrentFrame();
   return (
     <Frame label="THE COST OF BALIK-PILA">
@@ -420,7 +435,7 @@ function Maria() {
     </Frame>
   );
 }
-function Trips() {
+export function Trips() {
   const f = useCurrentFrame();
   const step = f < 250 ? 0 : f < 470 ? 1 : 2;
   return (
@@ -467,7 +482,7 @@ function Trips() {
     </Frame>
   );
 }
-function Confusion() {
+export function Confusion() {
   return (
     <Frame dark label="THE INFORMATION GAP">
       <H>
@@ -529,7 +544,7 @@ function Backlog() {
     </Frame>
   );
 }
-function Platform() {
+export function Platform() {
   return (
     <Frame label="ONE PLATFORM. TWO SIDES.">
       <H>
@@ -547,7 +562,7 @@ function Platform() {
           }}
         >
           <Img
-            src={staticFile("GovGuidePH_Logo.png")}
+            src={staticFile("pitch/logo-mark.png")}
             style={{ width: 140, height: 140, objectFit: "contain" }}
           />
           <span style={{ fontSize: 84, fontWeight: 800, letterSpacing: -3 }}>
@@ -561,7 +576,7 @@ function Platform() {
     </Frame>
   );
 }
-function Grounding() {
+export function Grounding() {
   const f = useCurrentFrame();
   return (
     <Frame dark label="HOW DOES IT KNOW?">
@@ -616,7 +631,7 @@ function Grounding() {
   );
 }
 
-function Screen({
+export function Screen({
   asset,
   title,
   caption,
@@ -689,7 +704,7 @@ function Screen({
     </Frame>
   );
 }
-function Paragraph() {
+export function Paragraph() {
   const f = useCurrentFrame();
   return (
     <Frame label="WORKFLOW ILLUSTRATION · SAMPLE DETAILS">
@@ -814,7 +829,7 @@ function Mismatch() {
     </Frame>
   );
 }
-function Voice() {
+export function Voice() {
   const f = useCurrentFrame();
   return (
     <Frame dark label="ANOTHER WAY TO ASK">
@@ -862,7 +877,7 @@ function Voice() {
     </Frame>
   );
 }
-function Extension() {
+export function Extension() {
   const f = useCurrentFrame();
   return (
     <Frame label="THE CHROME AUTOFILL COMPANION">
@@ -910,7 +925,7 @@ function Extension() {
     </Frame>
   );
 }
-function Tracker({ fixed = false }: { fixed?: boolean }) {
+export function Tracker({ fixed = false }: { fixed?: boolean }) {
   const f = useCurrentFrame();
   const stages = [
     "Submitted",
@@ -996,7 +1011,7 @@ function Tracker({ fixed = false }: { fixed?: boolean }) {
     </Frame>
   );
 }
-function Handler({ confirm = false }: { confirm?: boolean }) {
+export function Handler({ confirm = false }: { confirm?: boolean }) {
   const f = useCurrentFrame();
   return (
     <Frame label="AGENCY WORKFLOW ILLUSTRATION · PSA">
@@ -1103,7 +1118,7 @@ function Handler({ confirm = false }: { confirm?: boolean }) {
     </Frame>
   );
 }
-function Impact() {
+export function Impact() {
   return (
     <Frame dark label="THE VALUE TO A DAILY EARNER">
       <H>
@@ -1139,7 +1154,7 @@ function Impact() {
     </Frame>
   );
 }
-function Costs() {
+export function Costs() {
   return (
     <Frame
       label="WHY CATCH ERRORS EARLY?"
@@ -1178,7 +1193,7 @@ function Costs() {
     </Frame>
   );
 }
-function Trust({ kind }: { kind: "source" | "human" | "privacy" }) {
+export function Trust({ kind }: { kind: "source" | "human" | "privacy" }) {
   const map = {
     source: {
       q: "What makes an answer trustworthy?",
@@ -1363,7 +1378,6 @@ function End() {
           >
             Thank you.
           </div>
-          <FloatingArtifact label="PLATFORM" />
         </div>
         <div
           style={{
@@ -1387,7 +1401,7 @@ function End() {
           GovGuidePH
         </div>
         <Img
-          src={staticFile("GovGuidePH_Logo.png")}
+          src={staticFile("pitch/logo-mark.png")}
           style={{
             position: "absolute",
             left: 840,
@@ -1445,7 +1459,7 @@ export const GovGuidePitch = () => {
   return (
     <AbsoluteFill style={{ ...text, background: C.white }}>
       <Sequence name="Hook" from={0} durationInFrames={8 * fps}>
-        <Hook />
+        <Opening />
       </Sequence>
       <Sequence
         name="Maria and Friday"
@@ -1459,14 +1473,14 @@ export const GovGuidePitch = () => {
         from={18 * fps}
         durationInFrames={12 * fps}
       >
-        <Trips />
+        <Journey />
       </Sequence>
       <Sequence
         name="Information gap"
         from={30 * fps}
         durationInFrames={8 * fps}
       >
-        <Confusion />
+        <Fragmentation />
       </Sequence>
       <Sequence
         name="Agency backlog"
@@ -1476,30 +1490,30 @@ export const GovGuidePitch = () => {
         <Backlog />
       </Sequence>
       <Sequence name="GovGuide PH" from={45 * fps} durationInFrames={10 * fps}>
-        <Platform />
+        <PlatformReveal />
       </Sequence>
       <Sequence
         name="Charter grounding"
         from={55 * fps}
         durationInFrames={15 * fps}
       >
-        <Grounding />
+        <Grounded />
       </Sequence>
       <Sequence
         name="Sign in and consent"
         from={70 * fps}
         durationInFrames={10 * fps}
       >
-        <Screen
+        <Product
           asset="login.png"
           title="Start with sign-in and consent."
           caption="Maria understands how her information will be used."
         />
       </Sequence>
       <Sequence name="Ask for PSA" from={80 * fps} durationInFrames={11 * fps}>
-        <Screen
+        <Product
           asset="psa-answer.png"
-          title="“Birth certificate para sa anak ko.”"
+          title="Start with Maria’s question."
           caption="Ask naturally. Get routed to PSA guidance."
           focus
         />
@@ -1509,7 +1523,7 @@ export const GovGuidePitch = () => {
         from={91 * fps}
         durationInFrames={10 * fps}
       >
-        <Screen
+        <Product
           asset="psa-checklist.png"
           title="Know what to prepare."
           caption="Requirements, fees and next steps in one conversation."
@@ -1521,7 +1535,7 @@ export const GovGuidePitch = () => {
         from={101 * fps}
         durationInFrames={12 * fps}
       >
-        <Paragraph />
+        <DraftTransform />
       </Sequence>
       <Sequence
         name="Discrepancy checker"
@@ -1535,117 +1549,87 @@ export const GovGuidePitch = () => {
         from={125 * fps}
         durationInFrames={8 * fps}
       >
-        <Voice />
+        <VoiceFlow />
       </Sequence>
       <Sequence
         name="Chrome autofill"
         from={133 * fps}
         durationInFrames={17 * fps}
       >
-        <Extension />
+        <ExtensionFocus />
       </Sequence>
       <Sequence
         name="Citizen decides"
         from={150 * fps}
         durationInFrames={10 * fps}
       >
-        <Tracker />
+        <ConnectedStatus mode="review" />
       </Sequence>
       <Sequence
         name="Agency language"
         from={160 * fps}
         durationInFrames={14 * fps}
       >
-        <Handler />
+        <ConnectedStatus mode="propose" />
       </Sequence>
       <Sequence
         name="Agency confirms"
         from={174 * fps}
         durationInFrames={12 * fps}
       >
-        <Handler confirm />
+        <ConnectedStatus mode="confirm" />
       </Sequence>
       <Sequence
         name="Citizen sees action needed"
         from={186 * fps}
         durationInFrames={12 * fps}
       >
-        <Tracker fixed />
+        <ConnectedStatus mode="fixed" />
       </Sequence>
       <Sequence name="NBI service" from={198 * fps} durationInFrames={11 * fps}>
-        <Frame label="WORKFLOW ILLUSTRATION · NBI CLEARANCE">
-          <H>Same guide. NBI clearance.</H>
-          <P>
-            A different service, with its own requirements and official source.
-          </P>
-          <div
-            style={{
-              marginTop: 90,
-              borderLeft: "6px solid #2563eb",
-              paddingLeft: 40,
-            }}
-          >
-            <P style={{ fontSize: 44, fontWeight: 700 }}>
-              “Kailangan ko ng NBI clearance.”
-            </P>
-            <Reveal delay={80}>
-              <P>Route the request to NBI.</P>
-            </Reveal>
-            <Reveal delay={160}>
-              <P>Retrieve the relevant Citizen’s Charter.</P>
-            </Reveal>
-            <Reveal delay={240}>
-              <P>Confirm current requirements before proceeding.</P>
-            </Reveal>
-          </div>
-        </Frame>
+        <ServiceSwitch service="NBI" />
       </Sequence>
       <Sequence
         name="PhilHealth service"
         from={209 * fps}
         durationInFrames={11 * fps}
       >
-        <Screen
-          asset="philhealth.png"
-          title="Same guide. PhilHealth registration."
-          caption="PMRF and membership preparation through the same conversation."
-          focus
-        />
+        <ServiceSwitch service="PhilHealth" />
       </Sequence>
       <Sequence
         name="Daily-earner impact"
         from={220 * fps}
         durationInFrames={12 * fps}
       >
-        <Impact />
+        <ValueVisual />
       </Sequence>
       <Sequence
         name="Cost of corrections"
         from={232 * fps}
         durationInFrames={12 * fps}
       >
-        <Costs />
+        <ValueVisual cost />
       </Sequence>
       <Sequence
         name="Trust - sources"
         from={244 * fps}
         durationInFrames={10 * fps}
       >
-        <Trust kind="source" />
+        <TrustDemo kind="source" />
       </Sequence>
       <Sequence
         name="Trust - people"
         from={254 * fps}
         durationInFrames={10 * fps}
       >
-        <Trust kind="human" />
+        <TrustDemo kind="human" />
       </Sequence>
       <Sequence
         name="Trust - privacy"
         from={264 * fps}
         durationInFrames={9 * fps}
       >
-        <Trust kind="privacy" />
+        <TrustDemo kind="privacy" />
       </Sequence>
       <Sequence
         name="Scale across agencies"
@@ -1664,7 +1648,7 @@ export const GovGuidePitch = () => {
       <Sequence name="Closing" from={290 * fps} durationInFrames={10 * fps}>
         <End />
       </Sequence>
-      <Audio src={staticFile("pitch/underscore.wav")} volume={0.65} />
+      <Audio src={staticFile("pitch/underscore-product.wav")} volume={0.65} />
       <Sequence name="Stamp impact cue" from={128} durationInFrames={30}>
         <Audio src={staticFile("pitch/stamp-impact.wav")} volume={0.7} />
       </Sequence>

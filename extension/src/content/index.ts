@@ -3,6 +3,7 @@
  * Supports Laravel Livewire 3 / Alpine.js dynamic sections (PSA Online) & standard forms
  */
 
+import { isGovGuideUrl } from '../lib/bridge';
 import { scanPageForFields } from './detector';
 import { performAutofill } from './autofill';
 import type { CitizenVaultData, DetectionSummary, ExtensionMessage } from '../types';
@@ -13,12 +14,17 @@ let rescanTimeout: any = null;
 
 function scanForReferenceNumbers(): string | null {
   const text = document.body ? document.body.innerText : '';
-  const match = text.match(/\b(REQ-[A-Z0-9-]+|DFA-[A-Z0-9-]+|NBI-[A-Z0-9-]+|PSA-[A-Z0-9-]+|PH-[A-Z0-9-]+)\b/i);
+  const match = text.match(
+    /\b(REQ-[A-Z0-9-]+|DFA-[A-Z0-9-]+|NBI-[A-Z0-9-]+|PSA-[A-Z0-9-]+|PH-[A-Z0-9-]+)\b/i,
+  );
   return match ? match[1] : null;
 }
 
 function isIgnoredDomain(): boolean {
-  const host = (typeof window !== 'undefined' && window.location.hostname) ? window.location.hostname.toLowerCase() : '';
+  const host =
+    typeof window !== 'undefined' && window.location.hostname
+      ? window.location.hostname.toLowerCase()
+      : '';
   return (
     host.includes('google.') ||
     host.includes('bing.com') ||
@@ -65,21 +71,40 @@ async function initialize() {
 
   // 3. Listen for manual triggers from the Extension Popup button
   chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+    if (msg.type === 'REQUEST_WEB_DETAILS' && isGovGuideUrl(location.href)) {
+      const requestId = crypto.randomUUID();
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', receive);
+        sendResponse({ error: 'GovGuide did not respond. Refresh the tab and unlock My Details.' });
+      }, 10000);
+      const receive = (event: MessageEvent) => {
+        if (
+          event.source !== window ||
+          event.origin !== location.origin ||
+          event.data?.type !== 'GOVGUIDE_DETAILS_RESPONSE' ||
+          event.data.requestId !== requestId
+        )
+          return;
+        clearTimeout(timeout);
+        window.removeEventListener('message', receive);
+        sendResponse(event.data);
+      };
+      window.addEventListener('message', receive);
+      window.postMessage(
+        { type: 'GOVGUIDE_DETAILS_REQUEST', requestId, ...msg.payload },
+        location.origin,
+      );
+      return true;
+    }
     if (msg.type === 'DETECT_FIELDS_REQUEST') {
-      if (cachedVault) {
-        const summary = runDetection(cachedVault);
-        sendResponse({ summary });
-      } else {
-        chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (response) => {
-          if (response && response.vault) {
-            cachedVault = response.vault;
-            const summary = runDetection(response.vault);
-            sendResponse({ summary });
-          } else {
-            sendResponse({ summary: null });
-          }
-        });
-      }
+      chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (response) => {
+        if (chrome.runtime.lastError || !response?.vault) {
+          sendResponse({ summary: null });
+          return;
+        }
+        cachedVault = response.vault;
+        sendResponse({ summary: runDetection(response.vault) });
+      });
       return true;
     }
 
@@ -92,6 +117,21 @@ async function initialize() {
 
   // 4. Live synchronization bridge with GovGuide PH web application ("My Details" & Sign Out)
   window.addEventListener('message', (event) => {
+    if (
+      !isGovGuideUrl(location.href) ||
+      event.source !== window ||
+      event.origin !== location.origin
+    )
+      return;
+    if (event.data?.type === 'GOVGUIDE_DETAILS_LOCKED') {
+      cachedVault = null;
+      chrome.runtime.sendMessage(
+        { type: 'CLEAR_WEB_DETAILS', payload: { apiBaseUrl: location.origin } },
+        () => {
+          void chrome.runtime.lastError;
+        },
+      );
+    }
     if (event.data && event.data.type === 'GOVGUIDE_MY_DETAILS_UPDATED') {
       const { applicant, citizenId } = event.data;
       if (applicant) {
@@ -109,14 +149,12 @@ async function initialize() {
               cachedVault = res.vault;
               runDetection(res.vault);
             }
-          }
+          },
         );
       }
     }
     if (event.data && event.data.type === 'GOVGUIDE_USER_SIGNED_OUT') {
       lastWebAuthToken = null;
-      lastPushedApplicantJson = null;
-      lastPushedCitizenId = null;
       cachedVault = null;
       try {
         chrome.runtime.sendMessage({ type: 'SYNC_WEB_AUTH', payload: { signedOut: true } }, () => {
@@ -126,41 +164,7 @@ async function initialize() {
     }
   });
 
-  // If on GovGuide web application, register origin and push immediately
-  if (
-    typeof window !== 'undefined' &&
-    (window.location.origin.includes('localhost') ||
-      window.location.origin.includes('127.0.0.1') ||
-      window.location.origin.includes('govguide'))
-  ) {
-    try {
-      chrome.runtime.sendMessage({
-        type: 'SET_SESSION',
-        payload: { apiBaseUrl: window.location.origin },
-      });
-    } catch {}
-
-    try {
-      const rawStored = localStorage.getItem('govguide_active_applicant');
-      const activeId = localStorage.getItem('govguide_active_citizen_id');
-      if (rawStored) {
-        const parsed = JSON.parse(rawStored);
-        if (parsed && typeof parsed === 'object') {
-          chrome.runtime.sendMessage({
-            type: 'PUSH_VAULT_FROM_WEB',
-            payload: {
-              applicant: parsed,
-              citizenId: activeId || parsed.id || 'active',
-              apiBaseUrl: window.location.origin,
-            },
-          });
-        }
-      }
-    } catch {
-      // Safe ignore
-    }
-
-    // Mirror the GovGuide web chat login (Supabase session) into the extension
+  if (isGovGuideUrl(location.href) && location.pathname.startsWith('/chat')) {
     startWebAuthBridge();
   }
 }
@@ -179,7 +183,10 @@ function readWebAuthTokens(): { accessToken: string; refreshToken: string } | nu
       const parsed = JSON.parse(raw);
       const sessionObj = parsed?.currentSession || parsed;
       if (sessionObj?.access_token) {
-        return { accessToken: sessionObj.access_token, refreshToken: sessionObj.refresh_token || '' };
+        return {
+          accessToken: sessionObj.access_token,
+          refreshToken: sessionObj.refresh_token || '',
+        };
       }
     }
   } catch {
@@ -189,72 +196,50 @@ function readWebAuthTokens(): { accessToken: string; refreshToken: string } | nu
 }
 
 let lastWebAuthToken: string | null | undefined;
-let lastPushedApplicantJson: string | null = null;
-let lastPushedCitizenId: string | null = null;
-
-function checkAndPushActiveApplicant() {
-  try {
-    const rawStored = localStorage.getItem('govguide_active_applicant');
-    const activeId = localStorage.getItem('govguide_active_citizen_id');
-    if (rawStored && (rawStored !== lastPushedApplicantJson || activeId !== lastPushedCitizenId)) {
-      lastPushedApplicantJson = rawStored;
-      lastPushedCitizenId = activeId;
-      const parsed = JSON.parse(rawStored);
-      if (parsed && typeof parsed === 'object') {
-        chrome.runtime.sendMessage({
-          type: 'PUSH_VAULT_FROM_WEB',
-          payload: {
-            applicant: parsed,
-            citizenId: activeId || parsed.id || 'active',
-            apiBaseUrl: window.location.origin,
-          },
-        });
-      }
-    }
-  } catch {
-    // Safe ignore
-  }
-}
-
+let webAuthPending = false;
 function pushWebAuthIfChanged() {
+  if (webAuthPending) return;
   const tokens = readWebAuthTokens();
   const token = tokens?.accessToken || null;
   if (token === lastWebAuthToken) return;
-  lastWebAuthToken = token;
+  if (!tokens && lastWebAuthToken === undefined) return;
+  webAuthPending = true;
   try {
     chrome.runtime.sendMessage(
       {
         type: 'SYNC_WEB_AUTH',
         payload: tokens
-          ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, apiBaseUrl: window.location.origin }
+          ? {
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              apiBaseUrl: window.location.origin,
+            }
           : { signedOut: true, apiBaseUrl: window.location.origin },
       },
-      () => {
-        void chrome.runtime.lastError;
-      }
+      (response) => {
+        webAuthPending = false;
+        if (!chrome.runtime.lastError && !response?.error) lastWebAuthToken = token;
+      },
     );
   } catch {
+    webAuthPending = false;
     // Extension context invalidated (e.g. reloaded) - safe ignore
   }
 }
 
 function startWebAuthBridge() {
   pushWebAuthIfChanged();
-  checkAndPushActiveApplicant();
   window.addEventListener('storage', () => {
     pushWebAuthIfChanged();
-    checkAndPushActiveApplicant();
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       pushWebAuthIfChanged();
-      checkAndPushActiveApplicant();
     }
   });
   // Same-tab profile or auth switches poll lightly
   setInterval(() => {
     pushWebAuthIfChanged();
-    checkAndPushActiveApplicant();
   }, 2500);
 }
 
