@@ -1,0 +1,283 @@
+[
+  {
+    "name": "NBI clearance Charter material",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S01"
+    ],
+    "format": "HTML; current edition still required",
+    "license": "Reuse terms not verified; retain provenance and review before redistribution.",
+    "role": "Use a reviewed current Charter to ground clearance preparation. The page located here is legacy material.",
+    "limit": "Do not import its old fees, phone numbers or office schedule as current facts.",
+    "ingest": "Create service-level chunks only after obtaining a current approved edition; record office and effective date.",
+    "metric": "Score whether clearance answers use the correct edition and abstain on missing current evidence.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "PSA civil-registration Charter collection",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S43"
+    ],
+    "format": "HTML index and linked service documents",
+    "license": "Check the selected document terms and any exceptions before republishing.",
+    "role": "Use office-appropriate Charter sections for certificate-copy and correction workflows.",
+    "limit": "An index is not a complete procedure; inspect each linked service and office scope.",
+    "ingest": "Ingest approved sections with document type, transaction, outlet, page and version metadata.",
+    "metric": "Measure retrieval of the correct certificate and transaction, including no-record and correction cases.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "PhilHealth PMRF blank form",
+    "kind": "official form corpus",
+    "source_ids": [
+      "S07"
+    ],
+    "format": "Two-page PDF",
+    "license": "The form says it may be reproduced and is not for sale; filled forms require separate privacy handling.",
+    "role": "Use the blank form as a field-schema reference and base for clearly synthetic inspection fixtures.",
+    "limit": "The reviewed form is dated January 2020; verify the applicable version before operational use.",
+    "ingest": "Record form version and optional or conditional fields; create artificial entries without real identifiers.",
+    "metric": "Measure field extraction and appropriate unknowns, not guessed member eligibility.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "SSS 2025 Citizen Charter",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S45"
+    ],
+    "format": "PDF",
+    "license": "Reuse terms not verified; do not assume all attachments share one license.",
+    "role": "Use formal service tables to research SSS application steps and transaction distinctions.",
+    "limit": "An older Charter must be checked for superseding rules before use as current policy.",
+    "ingest": "Keep each requirement with its agency action, service type and exceptions during extraction.",
+    "metric": "Test whether registration, amendments and benefit questions retrieve their own applicable sections.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "DFA passport requirement annexes",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S11",
+      "S12"
+    ],
+    "format": "PDF annexes",
+    "license": "Verify document reuse terms; preserve issuer and edition attribution.",
+    "role": "Use applicable annexes to distinguish adult, minor, new, renewal and exceptional passport cases.",
+    "limit": "An overseas-post annex does not establish domestic appointment arrangements or local fees.",
+    "ingest": "Tag consular location and applicant category; quarantine conflicting or incomplete excerpts.",
+    "metric": "Measure wrong-category retrieval and unsupported guarantees about issuance.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "PSA Philippine Standard Geographic Code",
+    "kind": "reference dataset",
+    "source_ids": [
+      "S28"
+    ],
+    "format": "Versioned publications and database; page links API documentation",
+    "license": "Confirm the selected release terms and attribution requirements.",
+    "role": "Normalize locality names and geographic hierarchy for service routing.",
+    "limit": "Geographic codes do not establish agency catchment areas, opening hours or travel distances.",
+    "ingest": "Pin a release and maintain aliases and change history; inspect the actual downloaded schema first.",
+    "metric": "Evaluate correct resolution of same-name localities, renamed areas and ambiguous barangays.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "PSA OpenSTAT",
+    "kind": "statistical dataset portal",
+    "source_ids": [
+      "S29"
+    ],
+    "format": "Aggregate statistical tables; export options depend on table",
+    "license": "Check table metadata, attribution and reuse conditions for each selected series.",
+    "role": "Support aggregate service-planning context and documented baseline analysis.",
+    "limit": "Aggregate statistics cannot determine one citizen’s eligibility or reveal individual case status.",
+    "ingest": "Keep dimensions, units, periods, geography, revisions and missing-value codes with the values.",
+    "metric": "Test unit correctness, period matching and resistance to individual-level inference.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "PSA Data Archive (PSADA)",
+    "kind": "microdata catalog",
+    "source_ids": [
+      "S30"
+    ],
+    "format": "Study catalog, metadata and access-controlled or public-use files",
+    "license": "Access and reuse conditions vary by study; inspect them before downloading or redistribution.",
+    "role": "Research available surveys and their metadata when a justified analytical question requires microdata.",
+    "limit": "Discovery in a catalog does not grant unrestricted access or permission to reidentify people.",
+    "ingest": "Use the official acquisition route; minimize selected variables and preserve study documentation.",
+    "metric": "Check valid population, weighting and privacy constraints with an appropriate analyst before drawing conclusions.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "Open Data Philippines",
+    "kind": "government dataset portal",
+    "source_ids": [
+      "S31"
+    ],
+    "format": "Dataset catalog; resource formats vary",
+    "license": "Dataset-specific terms must be checked; portal presence is not a blanket license.",
+    "role": "Discover government-published datasets relevant to service locations or contextual analysis.",
+    "limit": "The portal does not itself verify that every dataset is current, complete or suitable for citizen guidance.",
+    "ingest": "Inspect publisher, resource URL, release date, schema and coverage before approval.",
+    "metric": "Track stale-resource rate, missing metadata and whether each cited dataset supports its claimed use.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "Belebele",
+    "kind": "reading-comprehension benchmark",
+    "source_ids": [
+      "S32"
+    ],
+    "format": "Parallel multiple-choice reading-comprehension data",
+    "license": "Benchmark CC BY-SA 4.0; assembled training material has different terms.",
+    "role": "Evaluate reading comprehension in Tagalog and Cebuano among the supported language variants.",
+    "limit": "The authors intend the benchmark for testing, not training or validation; it is not a Philippine-government QA corpus.",
+    "ingest": "Use the original test protocol and language identifiers; keep this material out of the training and tuning sets.",
+    "metric": "Report language-specific comprehension accuracy and error examples alongside local service tests.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "FLORES-200 / newer FLORES releases",
+    "kind": "translation benchmark",
+    "source_ids": [
+      "S33"
+    ],
+    "format": "Parallel sentence evaluation files",
+    "license": "Original FLORES-200 is CC BY-SA 4.0; inspect newer release terms separately.",
+    "role": "Evaluate translation fidelity using aligned multilingual text.",
+    "limit": "Translation quality does not establish government-policy correctness; the original repository points to newer maintained releases.",
+    "ingest": "Pin the chosen release and language pair; keep aligned sentences together for split hygiene.",
+    "metric": "Measure translation errors that change negation, conditions, numbers and names, with human review.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "SIB-200",
+    "kind": "topic-classification benchmark",
+    "source_ids": [
+      "S34"
+    ],
+    "format": "Annotated topic data, scripts and linked dataset distribution",
+    "license": "Repository lists Apache-2.0; inspect data and upstream FLORES licensing separately.",
+    "role": "Use as a multilingual classification baseline, then build a separate government-service intent test.",
+    "limit": "General news-topic labels are not NBI, PSA or PhilHealth service intents.",
+    "ingest": "Inspect language availability and label definitions in the selected release; avoid relabeling them as citizen intents.",
+    "metric": "Report classification performance separately from domain-routing performance.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "SEA-HELM",
+    "kind": "regional evaluation suite",
+    "source_ids": [
+      "S35"
+    ],
+    "format": "Evaluation framework with component tasks",
+    "license": "Repository code is MIT; component datasets require their own license checks.",
+    "role": "Use regional language evaluation tasks as supplementary evidence of model capability.",
+    "limit": "A suite score does not prove accuracy on local Charters or safety of GovGuide tools.",
+    "ingest": "Pin the framework revision and selected task datasets, languages and judge configuration.",
+    "metric": "Report relevant per-task and per-language outcomes, not only a combined leaderboard number.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "FUNSD",
+    "kind": "document-understanding benchmark",
+    "source_ids": [
+      "S36"
+    ],
+    "format": "Annotated scanned forms; page reports 199 forms",
+    "license": "Data redistribution terms were not verified here; check the dataset release before use.",
+    "role": "Evaluate basic form reading, entities and layout relationships.",
+    "limit": "It does not validate Philippine IDs, official authenticity or your specific local forms.",
+    "ingest": "Obtain the authorized release and inspect annotations; add separate synthetic local-form fixtures.",
+    "metric": "Measure extraction precision and recall, plus abstention on unreadable fields.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "BIPIA",
+    "kind": "indirect-injection benchmark",
+    "source_ids": [
+      "S37"
+    ],
+    "format": "Benchmark tasks, attacks and context reconstruction scripts",
+    "license": "Repository notes license-related reconstruction requirements for some contexts.",
+    "role": "Probe whether external text can redirect an assistant away from its authorized task.",
+    "limit": "It is a security test resource, not a corpus of government facts or a guarantee of complete attack coverage.",
+    "ingest": "Run in isolation with synthetic secrets and controlled tools; follow the context-generation instructions.",
+    "metric": "Measure attack success and legitimate-task completion together.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "InjecAgent",
+    "kind": "tool-injection benchmark",
+    "source_ids": [
+      "S38"
+    ],
+    "format": "Repository data and evaluation scripts",
+    "license": "Repository displays MIT; verify included artifact terms before redistribution.",
+    "role": "Evaluate tool-integrated indirect injection; authors describe 1,054 cases.",
+    "limit": "Its cases do not by themselves test Philippine service rules or every production connector.",
+    "ingest": "Adapt only the harness boundaries needed for a sandbox and retain original benchmark attribution.",
+    "metric": "Inspect unauthorized tool actions and data exfiltration outcomes, not just refusal wording.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "AgentDojo",
+    "kind": "agent-security benchmark environment",
+    "source_ids": [
+      "S39"
+    ],
+    "format": "Executable evaluation environment and task suites",
+    "license": "MIT repository; verify any additional dependencies and content terms.",
+    "role": "Exercise agent tasks under prompt-injection attacks with observable execution outcomes.",
+    "limit": "It is an environment, not a ready-made GovGuide knowledge base.",
+    "ingest": "Run pinned versions with mock or isolated tools and separate harmless tasks from adversarial conditions.",
+    "metric": "Report both successful authorized task completion and successful attacks.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "BIR circulars and registration checklists",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S15",
+      "S16"
+    ],
+    "format": "PDF circulars and transaction checklists",
+    "license": "Reuse terms not verified; preserve circular number and issuing authority.",
+    "role": "Ground narrow tax-identity and registration-update explanations in applicable documents.",
+    "limit": "Do not extend a Digital TIN circular to unrelated tax advice or every taxpayer category.",
+    "ingest": "Tag circular number, revision, transaction type and supersession relationship before retrieval.",
+    "metric": "Test whether answers preserve scope and avoid fabricated identifiers or tax conclusions.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "DSWD AICS policy material",
+    "kind": "official source corpus",
+    "source_ids": [
+      "S20",
+      "S21"
+    ],
+    "format": "Program page and memorandum-circular PDF",
+    "license": "Verify reuse terms and current policy applicability before ingestion.",
+    "role": "Research assistance categories and the applicable policy framework.",
+    "limit": "A program overview cannot establish an individual award; older circulars need supersession review.",
+    "ingest": "Associate each approved rule with office, assistance type, edition and decision authority.",
+    "metric": "Measure unsupported eligibility promises, invented award amounts and unnecessary medical-data requests.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  },
+  {
+    "name": "GovGuide synthetic local evaluation bank",
+    "kind": "proposed local dataset",
+    "source_ids": [],
+    "format": "This Markdown bank and generated JSONL",
+    "license": "Original authored draft; linked source and external dataset licenses remain separate.",
+    "role": "Test local wording, evidence gaps, document defects and confirmation behavior using fictional records.",
+    "limit": "It is AI-authored and not agency-validated; 450 cases intentionally reuse scenario families across contexts.",
+    "ingest": "Review and revise expected answers, create synthetic fixtures, and group related templates before splitting.",
+    "metric": "Score source support, safe uncertainty, privacy, tool behavior and language fairness against a reviewed rubric.",
+    "status": "discovered-and-reviewed-at-source-level; not downloaded or benchmarked"
+  }
+]

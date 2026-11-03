@@ -5,7 +5,13 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supaba
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key';
 
 export function createBrowserClient() {
-  return createClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 }
 
 export const supabase = createBrowserClient();

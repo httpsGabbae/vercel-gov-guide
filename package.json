@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "supabase": "supabase",
     "ingest": "tsx scripts/ingest.ts",
-    "ask": "tsx scripts/ask-cli.ts"
+    "ingest:qa": "tsx scripts/ingest-qa.ts",
+    "ask": "tsx scripts/ask-cli.ts",
+    "build:ext": "tsx extension/build.ts"
   },
   "dependencies": {
     "@google/genai": "^2.31.0",
@@ -30,11 +32,13 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.7",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@typescript-eslint/eslint-plugin": "^8.24.1",
     "@typescript-eslint/parser": "^8.24.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.20.1",
     "eslint-config-next": "^15.1.7",
@@ -44,6 +48,7 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
+    "vite": "^8.3.5",
     "vitest": "^3.0.5"
   }
 }

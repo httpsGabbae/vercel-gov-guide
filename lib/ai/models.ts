@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-export const GEMINI_FLASH_MODEL = 'gemini-3.8-flash';
+export const GEMINI_FLASH_MODEL = 'gemini-3.1-flash-lite';
 export const GEMINI_PRO_MODEL = 'gemini-4-argon';
 export const GEMINI_EMBEDDING_MODEL = 'gemini-embedding-001';
 export const EMBEDDING_DIMENSION = 768;
@@ -66,6 +66,9 @@ export async function embedText(text: string): Promise<number[]> {
     const response = await ai.models.embedContent({
       model: GEMINI_EMBEDDING_MODEL,
       contents: text,
+      config: {
+        outputDimensionality: EMBEDDING_DIMENSION,
+      },
     });
 
     const values =

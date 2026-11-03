@@ -1,6 +1,7 @@
 import { retrieveCharterChunks, type RetrievedChunk, type RetrieveOptions } from './retrieve';
 import { getGeminiClient, GEMINI_FLASH_MODEL } from '../ai/models';
 import { createServiceClient } from '../supabase/service';
+import { searchQABank, detectServiceFromQuery, type QAMatchResult } from './qa-matcher';
 
 export interface GroundedAnswerResult {
   query: string;
@@ -21,23 +22,93 @@ export interface GroundedAnswerResult {
     hotline: string;
     email: string;
   };
+  qaMatch?: {
+    id: string;
+    basis: string;
+    reviewStatus: string;
+  };
 }
 
-const OFFICIAL_CONTACTS: Record<string, { agency: string; hotline: string; email: string }> = {
+export const OFFICIAL_CONTACTS: Record<string, { agency: string; hotline: string; email: string }> = {
   NBI: {
     agency: 'National Bureau of Investigation (NBI)',
-    hotline: '(02) 8523-8231 / 0961-734-7222',
+    hotline: '(02) 8523-8231 loc. 5440 / 0961-734-7222',
     email: 'clearance@nbi.gov.ph',
   },
   PSA: {
     agency: 'Philippine Statistics Authority (PSA)',
     hotline: '(02) 8461-0500 / 0917-872-7722',
-    email: 'info@psa.gov.ph',
+    email: 'civilregistry@psa.gov.ph',
   },
   PHILHEALTH: {
     agency: 'Philippine Health Insurance Corporation (PhilHealth)',
     hotline: '(02) 8441-7442',
     email: 'actioncenter@philhealth.gov.ph',
+  },
+  SSS: {
+    agency: 'Social Security System (SSS)',
+    hotline: '1455 / (02) 81455',
+    email: 'usssaptayo@sss.gov.ph',
+  },
+  PAGIBIG: {
+    agency: 'Home Development Mutual Fund (Pag-IBIG)',
+    hotline: '(02) 8724-4244',
+    email: 'contactus@pagibigfund.gov.ph',
+  },
+  DFA: {
+    agency: 'Department of Foreign Affairs (DFA)',
+    hotline: '(02) 8234-3488',
+    email: 'passportconcerns@dfa.gov.ph',
+  },
+  DTI: {
+    agency: 'Department of Trade and Industry (DTI)',
+    hotline: '1-384 / 0917-834-3330',
+    email: 'bnrshelpdesk@dti.gov.ph',
+  },
+  BIR: {
+    agency: 'Bureau of Internal Revenue (BIR)',
+    hotline: '(02) 8538-3200',
+    email: 'contact_us@bir.gov.ph',
+  },
+  PRC: {
+    agency: 'Professional Regulation Commission (PRC)',
+    hotline: '(02) 8735-1534',
+    email: 'prc.recordsmanagement@gmail.com',
+  },
+  LTO: {
+    agency: 'Land Transportation Office (LTO)',
+    hotline: '(02) 8922-9061 to 66',
+    email: 'clientcare@lto.gov.ph',
+  },
+  DSWD: {
+    agency: 'Department of Social Welfare and Development (DSWD)',
+    hotline: '(02) 8931-8101 loc. 10141',
+    email: 'aics@dswd.gov.ph',
+  },
+  NATIONAL_ID: {
+    agency: 'Philippine Identification System (PhilSys / PSA)',
+    hotline: '1388 / (02) 8234-2228',
+    email: 'info@philsys.gov.ph',
+  },
+  PWD_ID: {
+    agency: 'National Council on Disability Affairs (NCDA)',
+    hotline: '(02) 8951-6033',
+    email: 'council@ncda.gov.ph',
+  },
+  DPWH: {
+    agency: 'Department of Public Works and Highways (DPWH)',
+    hotline: '165-02 / (02) 5304-3000',
+    email: 'citizens_feedback@dpwh.gov.ph',
+  },
+  ARTA: {
+    agency: 'Anti-Red Tape Authority (ARTA) & 8888 Citizens\' Hotline',
+    hotline: '8888 / 1-ARTA (1-3842) / (02) 8478-5093',
+    email: 'complaints@arta.gov.ph',
+  },
+  GENERAL: {
+    agency: 'Anti-Red Tape Authority (ARTA) & 8888 Citizens\' Hotline',
+    hotline: '8888 / 1-ARTA (1-3842) / (02) 8478-5093',
+    email: 'complaints@arta.gov.ph',
   },
 };
 
@@ -50,7 +121,6 @@ function extractChecklistAndFees(chunks: RetrievedChunk[]) {
   const primaryAgency = chunks[0]?.chunk.agencyCode;
 
   for (const { chunk } of chunks) {
-    // Only extract checklist and fees for the relevant primary agency if multiple are retrieved
     if (primaryAgency && chunk.agencyCode !== primaryAgency) continue;
 
     const lines = chunk.content.split('\n');
@@ -83,17 +153,66 @@ function extractChecklistAndFees(chunks: RetrievedChunk[]) {
 }
 
 /**
- * Synthesizes a grounded answer based strictly on retrieved Citizen Charter chunks.
+ * Synthesizes a grounded answer based strictly on retrieved Citizen Charter chunks
+ * or the GovGuide PH vetted Q&A research knowledge bank.
  */
 export async function generateGroundedAnswer(
   query: string,
   options: RetrieveOptions = {},
 ): Promise<GroundedAnswerResult> {
   const retrieved = await retrieveCharterChunks(query, options);
+  const qaMatches = searchQABank(query, {
+    topK: 2,
+    threshold: 0.35,
+    serviceFilter: options.serviceCode,
+  });
 
-  // 1. Fallback if no chunks meet the confidence threshold
+  // 1. If no charter chunks meet threshold, search the 1,000 Q&A Bank
   if (retrieved.length === 0) {
-    const agencyKey = options.agencyCode || 'NBI';
+    if (qaMatches.length > 0 && qaMatches[0].score >= 0.35) {
+      const topQA = qaMatches[0];
+      const sourceList = topQA.sources.map((s) => ({
+        agency: topQA.entry.service || 'GovGuide PH Knowledge Base',
+        service: topQA.entry.service || topQA.entry.section,
+        section: topQA.entry.section,
+        breadcrumb: `${topQA.entry.section} > ${topQA.entry.id}`,
+        similarity: topQA.score,
+        snippet: s.title ? `${s.title} (${s.url})` : topQA.entry.answer.slice(0, 160),
+      }));
+
+      return {
+        query,
+        answer: topQA.entry.answer,
+        isGrounded: true,
+        sources: sourceList,
+        checklist: [],
+        fees: [],
+        qaMatch: {
+          id: topQA.entry.id,
+          basis: topQA.entry.basis,
+          reviewStatus: topQA.entry.review_status,
+        },
+      };
+    }
+
+    // Fallback if neither charter chunks nor vetted Q&A match
+    const detected = detectServiceFromQuery(query);
+    let agencyKey = options.agencyCode || 'NBI';
+    if (detected) {
+      if (detected.includes('PSA')) agencyKey = 'PSA';
+      else if (detected.includes('PhilHealth')) agencyKey = 'PHILHEALTH';
+      else if (detected.includes('SSS')) agencyKey = 'SSS';
+      else if (detected.includes('Pag-IBIG')) agencyKey = 'PAGIBIG';
+      else if (detected.includes('DFA')) agencyKey = 'DFA';
+      else if (detected.includes('DTI')) agencyKey = 'DTI';
+      else if (detected.includes('BIR')) agencyKey = 'BIR';
+      else if (detected.includes('PRC')) agencyKey = 'PRC';
+      else if (detected.includes('LTO')) agencyKey = 'LTO';
+      else if (detected.includes('DSWD')) agencyKey = 'DSWD';
+      else if (detected.includes('National ID')) agencyKey = 'NATIONAL_ID';
+      else if (detected.includes('PWD')) agencyKey = 'PWD_ID';
+    }
+
     const contact = OFFICIAL_CONTACTS[agencyKey] || OFFICIAL_CONTACTS.NBI;
 
     // Asynchronously log to chat_unanswered in Supabase
@@ -139,13 +258,21 @@ export async function generateGroundedAnswer(
 
   const { checklist, fees } = extractChecklistAndFees(retrieved);
 
-  // 3. Grounded Answer Synthesis
+  // 3. Grounded Answer Synthesis with 4.5-second timeout for graceful fallback
   const apiKey = process.env.GEMINI_API_KEY;
   if (apiKey && apiKey !== 'your_gemini_api_key_here') {
     try {
       const ai = getGeminiClient();
       const contextBlocks = retrieved
         .map((r, i) => `[Source ${i + 1}: ${r.chunk.fullBreadcrumb}]\n${r.chunk.content}`)
+        .join('\n\n---\n\n');
+
+      const qaBlocks = qaMatches
+        .map((q, i) => `[Vetted Q&A ${i + 1}: ${q.entry.question}]\nAnswer: ${q.entry.answer}\nSource: ${q.entry.section} (${q.entry.id})`)
+        .join('\n\n---\n\n');
+
+      const fullContext = [contextBlocks, qaBlocks ? `### Vetted Citizen Q&A Knowledge:\n${qaBlocks}` : '']
+        .filter(Boolean)
         .join('\n\n---\n\n');
 
       const prompt = `You are GovGuide PH, an authoritative, warm, and helpful Philippine Government AI Assistant.
@@ -161,24 +288,33 @@ Grounding Rules:
 Citizen Query: "${query}"
 
 Official Citizen's Charter Context:
-${contextBlocks}
+${fullContext}
 
 Answer:`;
 
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: GEMINI_FLASH_MODEL,
         contents: prompt,
       });
 
-      const responseText = response.text || '';
-      if (responseText.trim().length > 20) {
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4500));
+      const response = await Promise.race([generatePromise, timeoutPromise]);
+
+      if (response && response.text && response.text.trim().length > 20) {
         return {
           query,
-          answer: responseText.trim(),
+          answer: response.text.trim(),
           isGrounded: true,
           sources,
           checklist,
           fees,
+          qaMatch: qaMatches[0]
+            ? {
+                id: qaMatches[0].entry.id,
+                basis: qaMatches[0].entry.basis,
+                reviewStatus: qaMatches[0].entry.review_status,
+              }
+            : undefined,
         };
       }
     } catch (err) {
@@ -194,11 +330,16 @@ Answer:`;
     .slice(0, 3)
     .join(' ');
 
-  const deterministicAnswer =
+  let deterministicAnswer =
     `Ayon sa opisyal na **${top.chunk.agencyName} Citizen's Charter** (${top.chunk.sectionTitle}):\n\n` +
     `${summarySnippet}\n\n` +
     `📌 **Pinagbatayan:** [${top.chunk.fullBreadcrumb}]\n` +
     `💡 Tiyaking dalhin ang mga orihinal na ID at kinakailangang dokumento upang maging handang-handa sa pila.`;
+
+  if (qaMatches.length > 0 && qaMatches[0].score >= 0.45) {
+    const topQA = qaMatches[0];
+    deterministicAnswer += `\n\n📚 **Vetted Guidance (${topQA.entry.id}):** ${topQA.entry.answer}`;
+  }
 
   return {
     query,
@@ -207,5 +348,12 @@ Answer:`;
     sources,
     checklist,
     fees,
+    qaMatch: qaMatches[0]
+      ? {
+          id: qaMatches[0].entry.id,
+          basis: qaMatches[0].entry.basis,
+          reviewStatus: qaMatches[0].entry.review_status,
+        }
+      : undefined,
   };
 }

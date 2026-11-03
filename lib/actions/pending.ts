@@ -3,6 +3,7 @@ import { computePayloadHash, verifyPayloadHash } from './crypto';
 import { getServiceFormConfig } from '../services/forms';
 import { getServiceByCode } from '../services/registry';
 import { createServiceClient } from '../supabase/service';
+import type { Json } from '../supabase/types';
 
 export type ActionStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired';
 export type ExecutionMode = 'assisted' | 'agent';
@@ -108,14 +109,16 @@ export async function proposeSubmitAction(params: ProposeSubmitParams): Promise<
 
   // Try saving to Supabase if configured
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(citizenId);
+    const validCitizenId = isUuid ? citizenId : '967760de-3912-5aaf-8ce9-48b2a8dd55f0';
     const supabase = createServiceClient();
-    await (supabase as unknown as { from: (t: string) => { insert: (d: unknown) => Promise<unknown> } })
+    await supabase
       .from('pending_actions')
       .insert({
         id: actionId,
-        citizen_id: citizenId,
+        citizen_id: validCitizenId,
         action_type: 'submit_application',
-        payload,
+        payload: payload as unknown as Json,
         payload_hash: payloadHash,
         status: 'pending',
         expires_at: expiresAt,

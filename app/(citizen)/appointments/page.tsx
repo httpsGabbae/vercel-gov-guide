@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { Appointment, AppointmentSlot } from '@/lib/appointments/booking';
 import { listAllServices } from '@/lib/services/registry';
+import { safeResponseJson, parseResponseJson } from '@/lib/utils';
 
 export default function AppointmentsPage() {
   const citizenId = 'user-juan-001'; // Default active citizen
@@ -47,8 +48,10 @@ export default function AppointmentsPage() {
       setIsLoading(true);
       const res = await fetch(`/api/appointments?citizenId=${citizenId}`);
       if (res.ok) {
-        const data = await res.json();
-        setAppointments(data);
+        const { data } = await safeResponseJson(res);
+        if (Array.isArray(data)) {
+          setAppointments(data);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -61,8 +64,10 @@ export default function AppointmentsPage() {
     try {
       const res = await fetch(`/api/appointments/slots?serviceCode=${svcCode}&date=${date}`);
       if (res.ok) {
-        const data = await res.json();
-        setAvailableSlots(data);
+        const { data } = await safeResponseJson(res);
+        if (Array.isArray(data)) {
+          setAvailableSlots(data);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -114,8 +119,8 @@ export default function AppointmentsPage() {
           }),
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Nabigo ang pag-reschedule.');
+        const data = await parseResponseJson(res);
+        if (!data || data.error) throw new Error(data?.error || 'Nabigo ang pag-reschedule.');
 
         setToastMessage('Matagumpay na nai-reschedule ang iyong appointment!');
       } else {
@@ -130,8 +135,8 @@ export default function AppointmentsPage() {
           }),
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Nabigo ang pag-book ng appointment.');
+        const data = await parseResponseJson(res);
+        if (!data || data.error) throw new Error(data?.error || 'Nabigo ang pag-book ng appointment.');
 
         setToastMessage('Matagumpay na nakumpirma ang iyong appointment!');
       }

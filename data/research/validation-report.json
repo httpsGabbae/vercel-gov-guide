@@ -1,0 +1,316 @@
+{
+  "checked": "2026-10-29",
+  "total_records": 1000,
+  "unique_normalized_questions": 1000,
+  "unique_normalized_answers": 848,
+  "exact_duplicate_answer_groups": [
+    [
+      "GGPH-0454",
+      "GGPH-0474",
+      "GGPH-0494",
+      "GGPH-0514",
+      "GGPH-0534",
+      "GGPH-0554",
+      "GGPH-0574",
+      "GGPH-0594",
+      "GGPH-0614",
+      "GGPH-0634",
+      "GGPH-0654",
+      "GGPH-0674",
+      "GGPH-0694",
+      "GGPH-0714",
+      "GGPH-0734"
+    ],
+    [
+      "GGPH-0456",
+      "GGPH-0476",
+      "GGPH-0496",
+      "GGPH-0516",
+      "GGPH-0536",
+      "GGPH-0556",
+      "GGPH-0576",
+      "GGPH-0596",
+      "GGPH-0616",
+      "GGPH-0636",
+      "GGPH-0656",
+      "GGPH-0676",
+      "GGPH-0696",
+      "GGPH-0716",
+      "GGPH-0736"
+    ],
+    [
+      "GGPH-0460",
+      "GGPH-0480",
+      "GGPH-0500",
+      "GGPH-0520",
+      "GGPH-0540",
+      "GGPH-0560",
+      "GGPH-0580",
+      "GGPH-0600",
+      "GGPH-0620",
+      "GGPH-0640",
+      "GGPH-0660",
+      "GGPH-0680",
+      "GGPH-0700",
+      "GGPH-0720",
+      "GGPH-0740"
+    ],
+    [
+      "GGPH-0461",
+      "GGPH-0481",
+      "GGPH-0501",
+      "GGPH-0521",
+      "GGPH-0541",
+      "GGPH-0561",
+      "GGPH-0581",
+      "GGPH-0601",
+      "GGPH-0621",
+      "GGPH-0641",
+      "GGPH-0661",
+      "GGPH-0681",
+      "GGPH-0701",
+      "GGPH-0721",
+      "GGPH-0741"
+    ],
+    [
+      "GGPH-0463",
+      "GGPH-0483",
+      "GGPH-0503",
+      "GGPH-0523",
+      "GGPH-0543",
+      "GGPH-0563",
+      "GGPH-0583",
+      "GGPH-0603",
+      "GGPH-0623",
+      "GGPH-0643",
+      "GGPH-0663",
+      "GGPH-0683",
+      "GGPH-0703",
+      "GGPH-0723",
+      "GGPH-0743"
+    ],
+    [
+      "GGPH-0531",
+      "GGPH-0571"
+    ],
+    [
+      "GGPH-0533",
+      "GGPH-0573"
+    ],
+    [
+      "GGPH-0546",
+      "GGPH-0586"
+    ],
+    [
+      "GGPH-0551",
+      "GGPH-0591",
+      "GGPH-0691",
+      "GGPH-0731"
+    ],
+    [
+      "GGPH-0553",
+      "GGPH-0593",
+      "GGPH-0693",
+      "GGPH-0733"
+    ],
+    [
+      "GGPH-0566",
+      "GGPH-0606",
+      "GGPH-0706",
+      "GGPH-0746"
+    ],
+    [
+      "GGPH-0751",
+      "GGPH-0761",
+      "GGPH-0771",
+      "GGPH-0781",
+      "GGPH-0791",
+      "GGPH-0801",
+      "GGPH-0811",
+      "GGPH-0821",
+      "GGPH-0831",
+      "GGPH-0841",
+      "GGPH-0851",
+      "GGPH-0861",
+      "GGPH-0871",
+      "GGPH-0881",
+      "GGPH-0891"
+    ],
+    [
+      "GGPH-0756",
+      "GGPH-0766",
+      "GGPH-0776",
+      "GGPH-0786",
+      "GGPH-0796",
+      "GGPH-0806",
+      "GGPH-0816",
+      "GGPH-0826",
+      "GGPH-0836",
+      "GGPH-0846",
+      "GGPH-0856",
+      "GGPH-0866",
+      "GGPH-0876",
+      "GGPH-0886",
+      "GGPH-0896"
+    ],
+    [
+      "GGPH-0757",
+      "GGPH-0767",
+      "GGPH-0777",
+      "GGPH-0787",
+      "GGPH-0797",
+      "GGPH-0807",
+      "GGPH-0817",
+      "GGPH-0827",
+      "GGPH-0837",
+      "GGPH-0847",
+      "GGPH-0857",
+      "GGPH-0867",
+      "GGPH-0877",
+      "GGPH-0887",
+      "GGPH-0897"
+    ],
+    [
+      "GGPH-0759",
+      "GGPH-0769",
+      "GGPH-0779",
+      "GGPH-0789",
+      "GGPH-0799",
+      "GGPH-0809",
+      "GGPH-0819",
+      "GGPH-0829",
+      "GGPH-0839",
+      "GGPH-0849",
+      "GGPH-0859",
+      "GGPH-0869",
+      "GGPH-0879",
+      "GGPH-0889",
+      "GGPH-0899"
+    ],
+    [
+      "GGPH-0760",
+      "GGPH-0770",
+      "GGPH-0780",
+      "GGPH-0790",
+      "GGPH-0800",
+      "GGPH-0810",
+      "GGPH-0820",
+      "GGPH-0830",
+      "GGPH-0840",
+      "GGPH-0850",
+      "GGPH-0860",
+      "GGPH-0870",
+      "GGPH-0880",
+      "GGPH-0890",
+      "GGPH-0900"
+    ]
+  ],
+  "source_count": 46,
+  "resource_count": 20,
+  "by_basis": {
+    "design": 150,
+    "source-summary": 75,
+    "safe-response": 225,
+    "synthetic-scenario": 450,
+    "research-recommendation": 100
+  },
+  "sections": [
+    {
+      "id": "01",
+      "count": 15,
+      "first": "GGPH-0001",
+      "last": "GGPH-0015"
+    },
+    {
+      "id": "02",
+      "count": 15,
+      "first": "GGPH-0016",
+      "last": "GGPH-0030"
+    },
+    {
+      "id": "03",
+      "count": 15,
+      "first": "GGPH-0031",
+      "last": "GGPH-0045"
+    },
+    {
+      "id": "04",
+      "count": 15,
+      "first": "GGPH-0046",
+      "last": "GGPH-0060"
+    },
+    {
+      "id": "05",
+      "count": 15,
+      "first": "GGPH-0061",
+      "last": "GGPH-0075"
+    },
+    {
+      "id": "06",
+      "count": 15,
+      "first": "GGPH-0076",
+      "last": "GGPH-0090"
+    },
+    {
+      "id": "07",
+      "count": 15,
+      "first": "GGPH-0091",
+      "last": "GGPH-0105"
+    },
+    {
+      "id": "08",
+      "count": 15,
+      "first": "GGPH-0106",
+      "last": "GGPH-0120"
+    },
+    {
+      "id": "09",
+      "count": 15,
+      "first": "GGPH-0121",
+      "last": "GGPH-0135"
+    },
+    {
+      "id": "10",
+      "count": 15,
+      "first": "GGPH-0136",
+      "last": "GGPH-0150"
+    },
+    {
+      "id": "11",
+      "count": 300,
+      "first": "GGPH-0151",
+      "last": "GGPH-0450"
+    },
+    {
+      "id": "12",
+      "count": 300,
+      "first": "GGPH-0451",
+      "last": "GGPH-0750"
+    },
+    {
+      "id": "13",
+      "count": 150,
+      "first": "GGPH-0751",
+      "last": "GGPH-0900"
+    },
+    {
+      "id": "14",
+      "count": 100,
+      "first": "GGPH-0901",
+      "last": "GGPH-1000"
+    }
+  ],
+  "checks": {
+    "sequential_ids": true,
+    "all_source_ids_resolve": true,
+    "no_unexpanded_templates": true,
+    "all_answers_present": true,
+    "all_records_marked_for_human_review": true
+  },
+  "limitations": [
+    "Structural validation only; no live model or agency integration tested.",
+    "No independent agency/legal/native-language approval.",
+    "450 deliberately parameterized inspection/action scenarios.",
+    "Source freshness and applicability must be reviewed before production."
+  ]
+}

@@ -8,6 +8,7 @@ import {
   type FormFieldDefinition,
 } from '@/lib/services/forms';
 import { getServiceByCode } from '@/lib/services/registry';
+import { parseResponseJson } from '@/lib/utils';
 import {
   ArrowLeft,
   Sparkles,
@@ -77,8 +78,7 @@ export default function ServiceFormPage({
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to propose draft');
-      const data = await res.json();
+      const data = await parseResponseJson(res);
 
       setFormData((prev) => ({ ...prev, ...data.draftData }));
       setMissingFields(data.missingFields || []);

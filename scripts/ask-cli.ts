@@ -28,6 +28,10 @@ async function main() {
   console.log(result.answer);
   console.log('\n');
 
+  if (result.qaMatch) {
+    console.log(`💡 Research Knowledge Bank Grounding: [${result.qaMatch.id}] (Basis: ${result.qaMatch.basis}, Review Status: ${result.qaMatch.reviewStatus})\n`);
+  }
+
   if (result.checklist.length > 0) {
     console.log('📋 Document Requirements Checklist:');
     result.checklist.forEach((item, idx) => {

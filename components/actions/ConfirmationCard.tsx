@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import type { PendingAction } from '@/lib/actions/pending';
+import { parseResponseJson } from '@/lib/utils';
 
 interface ConfirmationCardProps {
   action: PendingAction;
@@ -69,8 +70,8 @@ export function ConfirmationCard({ action, onSuccess, onCancel }: ConfirmationCa
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      const data = await parseResponseJson(res);
+      if (!data.success) {
         throw new Error(data.error || 'Nabigo ang pagkumpirma ng aplikasyon.');
       }
 

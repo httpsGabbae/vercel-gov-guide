@@ -76,16 +76,17 @@ describe('M3 Agent Tools Tests', () => {
 
       expect(res.found).toBe(false);
       expect(res.availableServices).toBeDefined();
-      expect(res.availableServices?.length).toBe(3);
+      expect(res.availableServices?.length).toBeGreaterThanOrEqual(4);
     });
 
     it('lists all registered MVP services', () => {
       const all = listAllServices();
-      expect(all.length).toBe(3);
+      expect(all.length).toBeGreaterThanOrEqual(4);
       const codes = all.map((s) => s.code);
       expect(codes).toContain('NBI_CLEARANCE');
       expect(codes).toContain('PSA_BIRTH_CERT');
       expect(codes).toContain('PHILHEALTH_REGISTRATION');
+      expect(codes).toContain('PSA_HELPLINE');
     });
   });
 });

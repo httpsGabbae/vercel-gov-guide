@@ -208,15 +208,37 @@ export async function bookSlotAtomic(params: {
 
     // Try synchronizing with Supabase if online
     try {
-      const supabase = createServiceClient();
-      await (supabase as unknown as { from: (t: string) => { insert: (d: unknown) => Promise<unknown> } })
-        .from('appointments')
-        .insert({
-          id: appointmentId,
-          citizen_id: citizenId,
-          slot_time: slot.slotTime,
-          status: 'confirmed',
-        });
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(citizenId);
+      if (isUuid) {
+        const supabase = createServiceClient();
+        const slotUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slotId)
+          ? slotId
+          : crypto.randomUUID();
+
+        const { data: svc } = await supabase.from('services').select('id').eq('code', serviceCode).maybeSingle();
+        if (svc) {
+          await supabase.from('appointment_slots').upsert(
+            {
+              id: slotUuid,
+              service_id: svc.id,
+              slot_time: slot.slotTime,
+              capacity: slot.capacity,
+              booked_count: slot.bookedCount,
+            },
+            { onConflict: 'service_id,slot_time' },
+          );
+        }
+
+        await supabase
+          .from('appointments')
+          .insert({
+            id: appointmentId,
+            citizen_id: citizenId,
+            slot_id: slotUuid,
+            slot_time: slot.slotTime,
+            status: 'confirmed',
+          });
+      }
     } catch {
       // safe fallback
     }
@@ -288,6 +310,17 @@ export async function rescheduleAppointment(params: {
     appointment.updatedAt = now;
     memoryAppointments.set(appointmentId, appointment);
 
+    // Synchronize reschedule with Supabase
+    try {
+      const supabase = createServiceClient();
+      await supabase
+        .from('appointments')
+        .update({ slot_time: newSlot.slotTime, status: 'rescheduled' })
+        .eq('id', appointmentId);
+    } catch {
+      // safe fallback
+    }
+
     // Audit log
     memoryAuditLogs.push({
       id: crypto.randomUUID(),
@@ -345,6 +378,17 @@ export async function cancelAppointment(params: {
     appointment.updatedAt = now;
     memoryAppointments.set(appointmentId, appointment);
 
+    // Synchronize cancellation with Supabase
+    try {
+      const supabase = createServiceClient();
+      await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', appointmentId);
+    } catch {
+      // safe fallback
+    }
+
     memoryAuditLogs.push({
       id: crypto.randomUUID(),
       actorId: citizenId,
@@ -366,6 +410,39 @@ export async function cancelAppointment(params: {
  * Retrieves all appointments for a specific citizen.
  */
 export async function getMyAppointments(citizenId: string): Promise<Appointment[]> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(citizenId);
+  if (isUuid) {
+    try {
+      const supabase = createServiceClient();
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('citizen_id', citizenId)
+        .order('slot_time', { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d) => {
+          const serviceDef = getServiceByCode('NBI_CLEARANCE');
+          return {
+            id: d.id,
+            citizenId: d.citizen_id,
+            serviceCode: 'NBI_CLEARANCE',
+            serviceName: serviceDef?.name || 'Government Clearance',
+            agencyName: serviceDef?.agencyName || 'Philippine Government Agency',
+            slotId: d.slot_id || 'slot-1',
+            slotTime: d.slot_time,
+            status: d.status as AppointmentStatus,
+            referenceCode: `APT-${d.id.slice(0, 8).toUpperCase()}`,
+            createdAt: d.created_at,
+            updatedAt: d.created_at,
+          };
+        });
+      }
+    } catch {
+      // fallback to memory
+    }
+  }
+
   return Array.from(memoryAppointments.values())
     .filter((a) => a.citizenId === citizenId)
     .sort((a, b) => new Date(b.slotTime).getTime() - new Date(a.slotTime).getTime());

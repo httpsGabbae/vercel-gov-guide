@@ -212,7 +212,7 @@ end;
 $$;
 
 -- ====================================================================
--- Row-Level Security (RLS) Configuration
+-- Row-Level Security (RLS) Configuration (Idempotent: Drop if exists)
 -- ====================================================================
 
 alter table public.agencies enable row level security;
@@ -228,16 +228,20 @@ alter table public.audit_logs enable row level security;
 alter table public.chat_unanswered enable row level security;
 
 -- Policies: Agencies
+drop policy if exists "Agencies are viewable by everyone" on public.agencies;
 create policy "Agencies are viewable by everyone"
   on public.agencies for select using (true);
 
+drop policy if exists "Agencies manageable by platform admin" on public.agencies;
 create policy "Agencies manageable by platform admin"
   on public.agencies for all using (public.current_user_role() = 'platform_admin');
 
 -- Policies: Services
+drop policy if exists "Active services viewable by everyone" on public.services;
 create policy "Active services viewable by everyone"
   on public.services for select using (is_active = true or public.current_user_role() in ('agency_admin', 'platform_admin'));
 
+drop policy if exists "Services manageable by platform admin or agency admin" on public.services;
 create policy "Services manageable by platform admin or agency admin"
   on public.services for all using (
     public.current_user_role() = 'platform_admin' or
@@ -245,9 +249,11 @@ create policy "Services manageable by platform admin or agency admin"
   );
 
 -- Policies: Charter Chunks (RAG)
+drop policy if exists "Charter chunks readable by everyone" on public.charter_chunks;
 create policy "Charter chunks readable by everyone"
   on public.charter_chunks for select using (true);
 
+drop policy if exists "Charter chunks insertable by agency or platform admins" on public.charter_chunks;
 create policy "Charter chunks insertable by agency or platform admins"
   on public.charter_chunks for all using (
     public.current_user_role() = 'platform_admin' or
@@ -255,33 +261,41 @@ create policy "Charter chunks insertable by agency or platform admins"
   );
 
 -- Policies: Profiles
+drop policy if exists "Citizens read and update own profile" on public.profiles;
 create policy "Citizens read and update own profile"
   on public.profiles for all using (auth.uid() = id);
 
+drop policy if exists "Platform admin full access to profiles" on public.profiles;
 create policy "Platform admin full access to profiles"
   on public.profiles for all using (public.current_user_role() = 'platform_admin');
 
 -- Policies: Service Requests
+drop policy if exists "Citizens manage own service requests" on public.service_requests;
 create policy "Citizens manage own service requests"
   on public.service_requests for all using (citizen_id = auth.uid());
 
+drop policy if exists "Agency admin view and manage agency requests" on public.service_requests;
 create policy "Agency admin view and manage agency requests"
   on public.service_requests for all using (
     public.current_user_role() = 'agency_admin' and
     service_id in (select id from public.services where agency_id = public.current_user_agency())
   );
 
+drop policy if exists "Platform admin full access to requests" on public.service_requests;
 create policy "Platform admin full access to requests"
   on public.service_requests for all using (public.current_user_role() = 'platform_admin');
 
 -- Policies: Pending Actions
+drop policy if exists "Citizens manage own pending actions" on public.pending_actions;
 create policy "Citizens manage own pending actions"
   on public.pending_actions for all using (citizen_id = auth.uid());
 
 -- Policies: Appointment Slots
+drop policy if exists "Appointment slots viewable by everyone" on public.appointment_slots;
 create policy "Appointment slots viewable by everyone"
   on public.appointment_slots for select using (true);
 
+drop policy if exists "Appointment slots managed by agency or platform admin" on public.appointment_slots;
 create policy "Appointment slots managed by agency or platform admin"
   on public.appointment_slots for all using (
     public.current_user_role() = 'platform_admin' or
@@ -290,9 +304,11 @@ create policy "Appointment slots managed by agency or platform admin"
   );
 
 -- Policies: Appointments
+drop policy if exists "Citizens manage own appointments" on public.appointments;
 create policy "Citizens manage own appointments"
   on public.appointments for all using (citizen_id = auth.uid());
 
+drop policy if exists "Agency admin view agency appointments" on public.appointments;
 create policy "Agency admin view agency appointments"
   on public.appointments for select using (
     public.current_user_role() = 'agency_admin' and
@@ -302,26 +318,55 @@ create policy "Agency admin view agency appointments"
   );
 
 -- Policies: Notifications
+drop policy if exists "Citizens read own notifications" on public.notifications;
 create policy "Citizens read own notifications"
   on public.notifications for select using (citizen_id = auth.uid());
 
+drop policy if exists "Citizens update own notifications (mark as read)" on public.notifications;
 create policy "Citizens update own notifications (mark as read)"
   on public.notifications for update using (citizen_id = auth.uid());
 
 -- Policies: Audit Logs
+drop policy if exists "System and users can insert audit logs" on public.audit_logs;
 create policy "System and users can insert audit logs"
   on public.audit_logs for insert with check (true);
 
+drop policy if exists "Audit logs viewable by agency and platform admins" on public.audit_logs;
 create policy "Audit logs viewable by agency and platform admins"
   on public.audit_logs for select using (
     public.current_user_role() in ('agency_admin', 'platform_admin')
   );
 
 -- Policies: Chat Unanswered
+drop policy if exists "Everyone can record unanswered chat" on public.chat_unanswered;
 create policy "Everyone can record unanswered chat"
   on public.chat_unanswered for insert with check (true);
 
+drop policy if exists "Unanswered chat logs viewable by admins" on public.chat_unanswered;
 create policy "Unanswered chat logs viewable by admins"
   on public.chat_unanswered for select using (
     public.current_user_role() in ('agency_admin', 'platform_admin')
   );
+
+-- ====================================================================
+-- 13. Chat Threads Table (Persistent Civic Sessions & Cryptographic Hash)
+-- ====================================================================
+create table if not exists public.chat_threads (
+  id text primary key,
+  citizen_id uuid references public.profiles(id) on delete set null,
+  applicant_name text default 'Citizen Applicant',
+  title text not null,
+  messages jsonb default '[]'::jsonb not null,
+  content_hash text not null,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
+);
+
+create index if not exists chat_threads_citizen_id_idx on public.chat_threads(citizen_id);
+create index if not exists chat_threads_updated_at_idx on public.chat_threads(updated_at desc);
+
+alter table public.chat_threads enable row level security;
+
+drop policy if exists "Everyone can read and save chat threads" on public.chat_threads;
+create policy "Everyone can read and save chat threads"
+  on public.chat_threads for all using (true) with check (true);

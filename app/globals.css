@@ -440,70 +440,98 @@
 }
 
 .spinner-main {
-  --w: 4px;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    var(--brand) 120deg,
-    var(--accent) 345deg,
-    var(--accent) 360deg
-  );
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(26, 127, 75, 0.2);
+  border-top-color: var(--brand);
+  border-right-color: var(--accent);
   border-radius: 50%;
   flex-shrink: 0;
   display: inline-block;
-  position: relative;
-  -webkit-mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - var(--w)),
-    #000 calc(100% - var(--w) + 0.5px)
-  );
-  mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - var(--w)),
-    #000 calc(100% - var(--w) + 0.5px)
-  );
-  animation: 0.9s linear infinite kg-spin;
-}
-.spinner-main::after {
-  content: '';
-  width: var(--w);
-  height: var(--w);
-  margin-left: calc(var(--w) / -2);
-  background: var(--accent);
-  border-radius: 50%;
-  position: absolute;
-  top: 0;
-  left: 50%;
+  animation: 0.8s linear infinite kg-spin;
 }
 
 .spinner-inline {
-  border: 2px solid rgba(0, 0, 0, 0.18);
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
   border-top-color: currentColor;
   border-radius: 50%;
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
   display: inline-block;
   animation: 0.7s linear infinite kg-spin;
 }
 
-@keyframes kg-shimmer {
-  0% {
-    background-position: 0%;
+@keyframes civic-text-pulse {
+  0%, 100% {
+    color: #0f172a;
+    opacity: 1;
   }
-  100% {
-    background-position: 100%;
+  50% {
+    color: #10b981;
+    opacity: 0.85;
   }
 }
 
 .shimmer {
-  background-image: linear-gradient(90deg, var(--fg) 0%, var(--brand) 50%, var(--fg) 100%);
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: 1.4s ease-in-out infinite alternate kg-shimmer;
+  display: inline-block;
+  font-weight: 500;
+  animation: civic-text-pulse 1.8s ease-in-out infinite;
+}
+
+/* Civic AI Thinking & Loading Animation Tokens */
+@keyframes civic-dot-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-6px) scale(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes civic-aura-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(26, 127, 75, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(26, 127, 75, 0);
+  }
+}
+
+@keyframes civic-skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.civic-dot-1 {
+  animation: civic-dot-bounce 1.3s infinite ease-in-out;
+}
+.civic-dot-2 {
+  animation: civic-dot-bounce 1.3s infinite ease-in-out 0.2s;
+}
+.civic-dot-3 {
+  animation: civic-dot-bounce 1.3s infinite ease-in-out 0.4s;
+}
+
+.civic-aura {
+  animation: civic-aura-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.civic-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(241, 245, 249, 0.8) 0%,
+    rgba(226, 232, 240, 0.95) 50%,
+    rgba(241, 245, 249, 0.8) 100%
+  );
+  background-size: 200% 100%;
+  animation: civic-skeleton-shimmer 1.8s infinite ease-in-out;
 }
 
 .badge {

@@ -90,21 +90,28 @@ async function runIngestion() {
           }
 
           if (agencyId) {
-            await client.from('charter_chunks').insert({
-              agency_id: agencyId,
-              title: chunk.fullBreadcrumb,
-              content: chunk.content,
-              metadata: {
-                ...chunk.metadata,
-                agencyCode: chunk.agencyCode,
-                serviceCode: chunk.serviceCode,
-                sectionTitle: chunk.sectionTitle,
-              },
-              embedding,
-            });
+            const { error: insErr } = await (client as unknown as {
+              from: (t: string) => { insert: (d: unknown) => Promise<{ error: { message: string } | null }> };
+            })
+              .from('charter_chunks')
+              .insert({
+                agency_id: agencyId,
+                title: chunk.fullBreadcrumb,
+                content: chunk.content,
+                metadata: {
+                  ...chunk.metadata,
+                  agencyCode: chunk.agencyCode,
+                  serviceCode: chunk.serviceCode,
+                  sectionTitle: chunk.sectionTitle,
+                },
+                embedding,
+              });
+            if (insErr) {
+              console.warn(`\n[Supabase Chunk Insert Error]:`, insErr.message);
+            }
           }
-        } catch {
-          // Safe to ignore if Supabase database is not running locally
+        } catch (dbErr) {
+          console.warn(`\n[Supabase DB Error]:`, dbErr);
         }
       }
 

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { evaluateGuardrails, answerSystemQuestion, redactSecrets } from '@/lib/ai/guardrails';
+import { evaluateGuardrails, answerSystemQuestion, redactSecrets, extractLearnedDetails } from '@/lib/ai/guardrails';
 import { POST as inspectPost } from '@/app/api/inspect/route';
 import type { ApplicantProfile } from '@/lib/services/charter-sources';
+import { parseNameParts, formatFullName } from '@/lib/services/charter-sources';
 
 const DEMO_APPLICANT: ApplicantProfile = {
   id: '967760de-3912-5aaf-8ce9-48b2a8dd55f0',
@@ -51,14 +52,24 @@ describe('Multi-Layer AI Guardrails & System Q&A Engine', () => {
   });
 
   it('blocks out-of-scope non-civic queries (OUT_OF_SCOPE)', () => {
-    const res = evaluateGuardrails(
+    const outOfScopeQueries = [
       'Give me a recipe for chicken adobo and Bitcoin price prediction.',
-      DEMO_APPLICANT,
-      'English',
-    );
-    expect(res.blocked).toBe(true);
-    expect(res.category).toBe('OUT_OF_SCOPE');
-    expect(res.guardrailCard?.policy_code).toBe('GRD-SCP-004');
+      'Paano magluto ng sinigang?',
+      'Ano ang magandang regalo para sa pasko?',
+      'Saan may masarap na halo-halo?',
+      'Kailan ang eleksyon sa Amerika?',
+      'Pwede mo ba akong kantahan o gawan ng tula?',
+      'How do I fix my car engine?',
+      'Write a python script to scrape Facebook',
+      'What is the capital of France and who won the NBA championship?',
+    ];
+
+    for (const q of outOfScopeQueries) {
+      const res = evaluateGuardrails(q, DEMO_APPLICANT, 'Auto');
+      expect(res.blocked).toBe(true);
+      expect(res.category).toBe('OUT_OF_SCOPE');
+      expect(res.guardrailCard?.policy_code).toBe('GRD-SCP-004');
+    }
   });
 
   it('allows and answers all valid system questions across NBI, PSA, PhilHealth, RA 11261, IDs, and Discrepancies', () => {
@@ -117,5 +128,63 @@ describe('Multi-Layer AI Guardrails & System Q&A Engine', () => {
     expect(data.blocked).toBe(true);
     expect(data.guardrailCategory).toBe('PROMPT_INJECTION');
     expect(data.cards[0].kind).toBe('guardrail_notice');
+  });
+
+  it('blocks out-of-scope non-civic chat queries in POST /api/inspect with GRD-SCP-004 notice', async () => {
+    const req = new NextRequest('http://localhost:3000/api/inspect', {
+      method: 'POST',
+      body: JSON.stringify({
+        text: 'Paano magluto ng masarap na sinigang na baboy?',
+        attachments: [],
+        applicant: DEMO_APPLICANT,
+        language: 'Filipino',
+      }),
+    });
+
+    const res = await inspectPost(req);
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.blocked).toBe(true);
+    expect(data.guardrailCategory).toBe('OUT_OF_SCOPE');
+    expect(data.cards[0].kind).toBe('guardrail_notice');
+    expect(data.cards[0].guardrail.policy_code).toBe('GRD-SCP-004');
+    expect(data.cards[0].guardrail.badge).toBe('DOMAIN SCOPE GUARDRAIL');
+    expect(data.text).toContain('Scope Guardrail');
+  });
+
+  it('correctly parses separate name parts and formats full name', () => {
+    const parts1 = parseNameParts('Juan Santos Dela Cruz Jr.');
+    expect(parts1.first_name).toBe('Juan');
+    expect(parts1.middle_name).toBe('Santos');
+    expect(parts1.last_name).toBe('Dela Cruz');
+    expect(parts1.suffix).toBe('Jr.');
+
+    const formatted = formatFullName('Juan', 'Santos', 'Dela Cruz', 'Jr.');
+    expect(formatted).toBe('Juan Santos Dela Cruz Jr.');
+
+    const parts2 = parseNameParts('Dela Cruz, Juan Santos III');
+    expect(parts2.first_name).toBe('Juan');
+    expect(parts2.middle_name).toBe('Santos');
+    expect(parts2.last_name).toBe('Dela Cruz');
+    expect(parts2.suffix).toBe('III');
+  });
+
+  it('dynamically learns user category and separate name fields from chat', () => {
+    const chatInput1 = 'Ako si Maria Clara Reyes-Santos. Isa akong Solo Parent.';
+    const learned1 = extractLearnedDetails(chatInput1);
+    expect(learned1.display_name).toBe('Maria Clara Reyes-Santos');
+    expect(learned1.first_name).toBe('Maria');
+    expect(learned1.middle_name).toBe('Clara');
+    expect(learned1.last_name).toBe('Reyes-Santos');
+    expect(learned1.title).toBe('Solo Parent (RA 11861)');
+
+    const chatInput2 = 'Category: Person with Disability. First Name: Pedro. Last Name: Penduko. Suffix: Jr.';
+    const learned2 = extractLearnedDetails(chatInput2);
+    expect(learned2.title).toBe('Person with Disability');
+    expect(learned2.first_name).toBe('Pedro');
+    expect(learned2.last_name).toBe('Penduko');
+    expect(learned2.suffix).toBe('Jr.');
+    expect(learned2.display_name).toBe('Pedro Penduko Jr.');
   });
 });

@@ -206,7 +206,7 @@ Citizen Conversation Text:
 
 Output strict JSON object only:`;
 
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: GEMINI_FLASH_MODEL,
         contents: prompt,
         config: {
@@ -214,8 +214,60 @@ Output strict JSON object only:`;
         },
       });
 
-      const responseText = response.text || '{}';
-      draftData = JSON.parse(responseText);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+      const response = await Promise.race([generatePromise, timeoutPromise]);
+
+      const deterministic = extractDraftDeterministic(serviceCode, conversationText);
+      if (response && response.text) {
+        const parsed = JSON.parse(response.text);
+        draftData = { ...deterministic, ...parsed };
+        // Normalize names to uppercase per official Philippine civil and clearance standards
+        for (const [k, v] of Object.entries(draftData)) {
+          if (typeof v === 'string' && /name/i.test(k) && !k.toLowerCase().includes('file')) {
+            draftData[k] = v.toUpperCase();
+          }
+        }
+        if (draftData.suffix === null || draftData.suffix === undefined) draftData.suffix = '';
+        if (draftData.middleName === null || draftData.middleName === undefined) draftData.middleName = '';
+        if (draftData.hasDependents === null || draftData.hasDependents === undefined) draftData.hasDependents = false;
+        if (typeof draftData.gender === 'string') draftData.gender = draftData.gender.toUpperCase();
+        if (typeof draftData.civilStatus === 'string') draftData.civilStatus = draftData.civilStatus.toUpperCase();
+        if (typeof draftData.applicationType === 'string') {
+          draftData.applicationType = draftData.applicationType.toLowerCase().includes('renew') ? 'RENEWAL' : 'NEW';
+        }
+        if (typeof draftData.purpose === 'string') {
+          const pur = draftData.purpose.toLowerCase();
+          if (pur.includes('travel') || pur.includes('abroad')) draftData.purpose = 'TRAVEL_ABROAD';
+          else if (pur.includes('visa')) draftData.purpose = 'VISA';
+          else if (pur.includes('other')) draftData.purpose = 'OTHER';
+          else draftData.purpose = 'LOCAL_EMPLOYMENT';
+        }
+        if (!draftData.presentAddress && draftData.address) draftData.presentAddress = draftData.address;
+
+        if (typeof draftData.membershipCategory === 'string') {
+          const cat = draftData.membershipCategory.toLowerCase();
+          if (cat.includes('self') || cat.includes('freelance')) {
+            draftData.membershipCategory = 'DIRECT_SELF_EMPLOYED';
+            if (typeof draftData.declaredMonthlyIncome !== 'number' || isNaN(draftData.declaredMonthlyIncome)) {
+              draftData.declaredMonthlyIncome = 25000;
+            }
+          } else if (cat.includes('senior')) {
+            draftData.membershipCategory = 'INDIRECT_SENIOR';
+            draftData.declaredMonthlyIncome = 0;
+          } else if (cat.includes('employed') && !cat.includes('self')) {
+            draftData.membershipCategory = 'DIRECT_EMPLOYED';
+            if (typeof draftData.declaredMonthlyIncome !== 'number' || isNaN(draftData.declaredMonthlyIncome)) {
+              draftData.declaredMonthlyIncome = 18000;
+            }
+          }
+        }
+        if (typeof draftData.declaredMonthlyIncome === 'object' && draftData.declaredMonthlyIncome !== null) {
+          const amt = (draftData.declaredMonthlyIncome as any).amount || (draftData.declaredMonthlyIncome as any).value || 25000;
+          draftData.declaredMonthlyIncome = Number(amt) || 25000;
+        }
+      } else {
+        draftData = extractDraftDeterministic(serviceCode, conversationText);
+      }
     } catch (err) {
       console.warn('[proposeDraft] Gemini extraction failed, using deterministic fallback:', err);
       draftData = extractDraftDeterministic(serviceCode, conversationText);

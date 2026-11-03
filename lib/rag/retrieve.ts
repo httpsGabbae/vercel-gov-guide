@@ -4,6 +4,25 @@ import { embedText, generateMockEmbedding } from '../ai/models';
 import { chunkCharterMarkdown, type CharterChunk } from './chunker';
 import { createServiceClient } from '../supabase/service';
 
+function getAgencyNameByCode(code?: string): string {
+  if (!code) return 'Government Agency';
+  const c = code.toUpperCase();
+  if (c === 'PSA') return 'Philippine Statistics Authority';
+  if (c === 'NBI') return 'National Bureau of Investigation';
+  if (c === 'PHILHEALTH') return 'Philippine Health Insurance Corporation';
+  if (c === 'SSS') return 'Social Security System';
+  if (c === 'PAGIBIG') return 'Home Development Mutual Fund (Pag-IBIG)';
+  if (c === 'DFA') return 'Department of Foreign Affairs';
+  if (c === 'DTI') return 'Department of Trade and Industry';
+  if (c === 'BIR') return 'Bureau of Internal Revenue';
+  if (c === 'PRC') return 'Professional Regulation Commission';
+  if (c === 'LTO') return 'Land Transportation Office';
+  if (c === 'DSWD') return 'Department of Social Welfare and Development';
+  if (c === 'PHILSYS') return 'Philippine Identification System (PhilSys)';
+  if (c === 'NCDA') return 'National Council on Disability Affairs';
+  return 'Government Agency';
+}
+
 export interface RetrievedChunk {
   chunk: CharterChunk;
   similarity: number;
@@ -125,20 +144,24 @@ export async function retrieveCharterChunks(
       });
 
       if (!error && data && data.length > 0) {
-        return data.map((item) => ({
-          chunk: {
-            id: item.id,
-            agencyCode: (item.metadata as { agencyCode?: string })?.agencyCode || 'GOV',
-            agencyName: (item.metadata as { agencyName?: string })?.agencyName || 'Government Agency',
-            serviceCode: (item.metadata as { serviceCode?: string })?.serviceCode || 'SERVICE',
-            serviceName: (item.metadata as { serviceName?: string })?.serviceName || item.title,
-            sectionTitle: item.title,
-            content: item.content,
-            fullBreadcrumb: item.title,
-            metadata: (item.metadata as CharterChunk['metadata']) || { sourceFile: 'supabase' },
-          },
-          similarity: Math.round(item.similarity * 1000) / 1000,
-        }));
+        return data.map((item) => {
+          const aCode = (item.metadata as { agencyCode?: string })?.agencyCode || 'GOV';
+          const aName = (item.metadata as { agencyName?: string })?.agencyName || getAgencyNameByCode(aCode);
+          return {
+            chunk: {
+              id: item.id,
+              agencyCode: aCode,
+              agencyName: aName,
+              serviceCode: (item.metadata as { serviceCode?: string })?.serviceCode || 'SERVICE',
+              serviceName: (item.metadata as { serviceName?: string })?.serviceName || item.title,
+              sectionTitle: item.title,
+              content: item.content,
+              fullBreadcrumb: item.title,
+              metadata: (item.metadata as CharterChunk['metadata']) || { sourceFile: 'supabase' },
+            },
+            similarity: Math.round(item.similarity * 1000) / 1000,
+          };
+        });
       }
     } catch {
       // Continue to local index fallback
@@ -162,12 +185,19 @@ export async function retrieveCharterChunks(
 
     // Agency & Service match boost
     if (
+      (options.agencyCode && options.agencyCode.toLowerCase() === agencyLower) ||
       (queryLower.includes('nbi') && agencyLower === 'nbi') ||
-      (queryLower.includes('clearance') && agencyLower === 'nbi') ||
       (queryLower.includes('psa') && agencyLower === 'psa') ||
+      (queryLower.includes('philhealth') && agencyLower === 'philhealth')
+    ) {
+      baseSim += 0.35;
+    }
+
+    if (
+      (queryLower.includes('clearance') && agencyLower === 'nbi') ||
       (queryLower.includes('birth') && agencyLower === 'psa') ||
-      (queryLower.includes('philhealth') && agencyLower === 'philhealth') ||
-      (queryLower.includes('pmrf') && agencyLower === 'philhealth')
+      (queryLower.includes('pmrf') && agencyLower === 'philhealth') ||
+      (queryLower.includes('registration') && agencyLower === 'philhealth')
     ) {
       baseSim += 0.25;
     }

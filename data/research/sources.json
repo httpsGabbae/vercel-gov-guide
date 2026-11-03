@@ -1,0 +1,416 @@
+[
+  {
+    "id": "S01",
+    "title": "NBI clearance charter page",
+    "url": "https://nbi.gov.ph/citizens-charter/nbi-clearance-application/",
+    "scope": "Legacy page: useful for identifying process stages, NOT current fees, contacts, schedules or a complete checklist.",
+    "status": "read-legacy",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S02",
+    "title": "PSA birth certificate",
+    "url": "https://psa.gov.ph/birth-certificate",
+    "scope": "Application routes and record-search information.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S03",
+    "title": "PSA marriage certificate",
+    "url": "https://psa.gov.ph/marriage-certificate",
+    "scope": "Marriage-record search fields.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S04",
+    "title": "PSA CENOMAR",
+    "url": "https://psa.gov.ph/cenomar",
+    "scope": "Meaning and request information for CENOMAR.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S05",
+    "title": "PSA civil registration facts",
+    "url": "https://psa.gov.ph/civilregistration/facts",
+    "scope": "Registration context; complex corrections require case-specific review.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S06",
+    "title": "PhilHealth informal-economy registration",
+    "url": "https://www.philhealth.gov.ph/members/informal/registration.php",
+    "scope": "Category-specific registration pathway, not all member categories.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S07",
+    "title": "PhilHealth PMRF",
+    "url": "https://www.philhealth.gov.ph/downloads/membership/pmrf_012020.pdf",
+    "scope": "Form fields and instructions; confirm latest form before filing.",
+    "status": "read",
+    "edition": "UHC v.1 January 2020; two pages",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S08",
+    "title": "SSS membership application",
+    "url": "https://www.sss.gov.ph/become-an-sss-member",
+    "scope": "Online SS-number application and review steps.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S09",
+    "title": "SSS OFW membership",
+    "url": "https://www.sss.gov.ph/ofw-member",
+    "scope": "Lifetime SS number and record amendments.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S10",
+    "title": "Virtual Pag-IBIG",
+    "url": "https://www.pagibigfundservices.com/virtualpagibig/",
+    "scope": "Official membership, payment, records and loan navigation.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S11",
+    "title": "DFA passport requirements annex",
+    "url": "https://genevapcg.dfa.gov.ph/images/pdf/AnnexA.pdf",
+    "scope": "Basic adult-new requirements; overseas-post source, not a domestic appointment guide.",
+    "status": "search-extract",
+    "edition": "Annex A; edition not confirmed",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S12",
+    "title": "DFA Citizen charter 2025",
+    "url": "https://dfa.gov.ph/images/2025/transparency/DFA_Citizens_Charter_2025_1st_Edition_1.pdf",
+    "scope": "Passport requirement categories; full checklist not verified here.",
+    "status": "search-extract",
+    "edition": "2025 first edition",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S13",
+    "title": "DTI ecommerce FAQs",
+    "url": "https://ecommerce.dti.gov.ph/faqs/",
+    "scope": "Business registration routing by legal form.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S14",
+    "title": "DTI business-name application instructions",
+    "url": "https://bnrs.dti.gov.ph/pdf/registration/annex_a.pdf",
+    "scope": "Application fields and signature instructions.",
+    "status": "search-extract",
+    "edition": "Undated Annex A",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S15",
+    "title": "BIR Digital TIN ID circular",
+    "url": "https://bir-cdn.bir.gov.ph/local/pdf/RMC%20No.%20120-2023%20%281%29.pdf",
+    "scope": "Digital TIN ID policy and ORUS account requirement.",
+    "status": "search-extract",
+    "edition": "RMC 120-2023",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S16",
+    "title": "BIR registration update checklist",
+    "url": "https://web-services.bir.gov.ph/eappointment/files/checklist_of_documentary_requirements.pdf",
+    "scope": "ORUS update services; confirm taxpayer-specific category.",
+    "status": "search-extract",
+    "edition": "Revised July 2025",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S17",
+    "title": "PRC LERIS",
+    "url": "https://online1.prc.gov.ph/",
+    "scope": "Exam, registration, renewal, duplicate and correction services.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S18",
+    "title": "PRC LERIS anti-fixer warning",
+    "url": "https://online2.prc.gov.ph/",
+    "scope": "Credential safety and free appointment slots; service fees are separate.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S19",
+    "title": "LTO charter",
+    "url": "https://www.lto.gov.ph/wp-content/uploads/2023/09/LTO-CITIZENS-CHARTER_2023_0905.pdf",
+    "scope": "Historical student-permit eligibility and documentary categories; refresh before operational guidance.",
+    "status": "search-extract-legacy",
+    "edition": "2023",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S20",
+    "title": "DSWD AICS program",
+    "url": "https://aics.dswd.gov.ph/aics-program/",
+    "scope": "Assistance categories; no guaranteed eligibility, amount or disbursement.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S21",
+    "title": "DSWD revised AICS guidelines",
+    "url": "https://dswd.gov.ph/issuances/MCs/MC_2022-016.pdf",
+    "scope": "Historical program guidelines; check superseding issuances.",
+    "status": "search-extract",
+    "edition": "MC 16 series 2022",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S22",
+    "title": "PSA Digital National ID advisory",
+    "url": "https://philsys.gov.ph/wp-content/uploads/2024/06/Public-Advisory-on-the-acceptance-of-digital-National-ID.pdf",
+    "scope": "Official digital-ID access and authentication principle.",
+    "status": "search-extract",
+    "edition": "11 June 2024",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S23",
+    "title": "PSA National ID scam warning",
+    "url": "https://psa.gov.ph/content/psa-warns-public-against-national-id-scams",
+    "scope": "Identity phishing patterns and unauthorized offers.",
+    "status": "search-extract",
+    "edition": "11 March 2025",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S24",
+    "title": "NCDA Citizen charter and PWD ID routing",
+    "url": "https://ncda.gov.ph/about/citizens-charter/",
+    "scope": "Directs PWD-ID seekers to municipal/city social welfare offices; not a nationwide local checklist.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S25",
+    "title": "ARTA frequently asked questions",
+    "url": "https://arta.gov.ph/frequently-asked-questions/",
+    "scope": "3/7/20 working-day framework, exceptions and commencement; direct fetch blocked.",
+    "status": "search-extract; direct HTTP 403",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S26",
+    "title": "Data Privacy Act",
+    "url": "https://privacy.gov.ph/data-privacy-act-/",
+    "scope": "Primary legal text; privacy design must be assessed against actual processing.",
+    "status": "search-extract",
+    "edition": "RA 10173",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S27",
+    "title": "Data Privacy Act implementing rules",
+    "url": "https://privacy.gov.ph/implementing-rules-regulations-data-privacy-act-2012/",
+    "scope": "Purpose, proportionality, transparency and retention principles.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S28",
+    "title": "PSA PSGC",
+    "url": "https://psa.gov.ph/classification/psgc/Philippine",
+    "scope": "Geographic names, hierarchy and versioned code publications.",
+    "status": "search-extract",
+    "edition": "Page lists 30 September 2026 release",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S29",
+    "title": "PSA OpenSTAT database",
+    "url": "https://openstat.psa.gov.ph/Database",
+    "scope": "Aggregate statistical tables, not citizen-level case records.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S30",
+    "title": "PSA data acquisition",
+    "url": "https://psa.gov.ph/how-acquire-data-psa",
+    "scope": "Official routes to publications, time series, microdata and enclave requests.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S31",
+    "title": "Open Data Philippines",
+    "url": "https://www.data.gov.ph/",
+    "scope": "Government dataset discovery portal; individual dataset licenses need checking.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S32",
+    "title": "Belebele",
+    "url": "https://github.com/facebookresearch/belebele",
+    "scope": "Multilingual reading-comprehension evaluation including Tagalog and Cebuano; test-only intent.",
+    "status": "search-extract",
+    "edition": "CC BY-SA 4.0 for benchmark; assembled training data has separate terms",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S33",
+    "title": "FLORES",
+    "url": "https://github.com/facebookresearch/flores",
+    "scope": "Parallel translation evaluation; repository points to newer OLDI releases.",
+    "status": "search-extract",
+    "edition": "Original FLORES-200: CC BY-SA 4.0",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S34",
+    "title": "SIB-200",
+    "url": "https://github.com/dadelani/sib-200",
+    "scope": "Multilingual topic classification; inspect upstream FLORES terms separately.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S35",
+    "title": "SEA-HELM",
+    "url": "https://github.com/aisingapore/SEA-HELM",
+    "scope": "Regional evaluation framework; component tasks and data have separate scope and terms.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S36",
+    "title": "FUNSD",
+    "url": "https://guillaumejaume.github.io/FUNSD/",
+    "scope": "199 annotated forms for document understanding; not Philippine identity documents.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S37",
+    "title": "BIPIA",
+    "url": "https://github.com/microsoft/BIPIA",
+    "scope": "Indirect prompt-injection benchmark; some contexts require reconstruction for licensing reasons.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S38",
+    "title": "InjecAgent",
+    "url": "https://github.com/uiuc-kang-lab/InjecAgent",
+    "scope": "Tool-integrated injection benchmark; 1,054 cases described by authors.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S39",
+    "title": "AgentDojo",
+    "url": "https://github.com/ethz-spylab/agentdojo",
+    "scope": "Dynamic agent-security evaluation environment, not a government knowledge corpus.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S40",
+    "title": "OWASP prompt injection",
+    "url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+    "scope": "Direct, indirect and multimodal attack context.",
+    "status": "read",
+    "edition": "LLM01:2025",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S41",
+    "title": "Supabase RLS",
+    "url": "https://supabase.com/docs/guides/database/postgres/row-level-security",
+    "scope": "Database authorization reference; privileged roles require special care.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S42",
+    "title": "Gemini model lifecycle",
+    "url": "https://ai.google.dev/gemini-api/docs/deprecations",
+    "scope": "Model availability must be checked against account access and current lifecycle.",
+    "status": "read",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S43",
+    "title": "PSA civil-registration charter index",
+    "url": "https://psa.gov.ph/civil-registration/citizens-charter",
+    "scope": "Charter discovery; linked office-specific services require independent review.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S44",
+    "title": "BIR response about Digital TIN ID",
+    "url": "https://www.foi.gov.ph/agencies/bir/digitall-tin-id-request/",
+    "scope": "Agency-authored FOI response; extract guidance, not requester details.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S45",
+    "title": "SSS Citizen charter",
+    "url": "https://www.sss.gov.ph/wp-content/uploads/2025/06/SSS-Citizens-Charter-2025-1st-Edition.pdf",
+    "scope": "Formal service tables; preserve requirements and exceptions with their rows.",
+    "status": "search-extract",
+    "edition": "2025 first edition",
+    "checked": "2026-10-29"
+  },
+  {
+    "id": "S46",
+    "title": "Gemini release notes",
+    "url": "https://ai.google.dev/gemini-api/docs/changelog",
+    "scope": "Shutdown history for older model identifiers.",
+    "status": "search-extract",
+    "edition": "Undated; revalidate before operational use",
+    "checked": "2026-10-29"
+  }
+]
