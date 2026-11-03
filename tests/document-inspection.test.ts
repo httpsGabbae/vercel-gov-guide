@@ -197,13 +197,27 @@ describe('real document discrepancy checks', () => {
     expect(data.message).not.toContain('sensitive');
     expect(data.message).not.toContain('clear image');
   });
-  it('bounds retries and allows dense scans more than 25 seconds', async () => {
+  it('reserves time for a fallback and disables unbounded SDK retries', async () => {
     generateContent.mockResolvedValue(result('Ana Reyes'));
     await inspect();
     expect(generateContent.mock.calls[0][0].config.httpOptions).toEqual({
-      timeout: 45000,
-      retryOptions: { attempts: 2, httpStatusCodes: [500, 502, 503, 504] },
+      timeout: 25000,
+      retryOptions: { attempts: 1 },
     });
     expect(generateContent.mock.calls[0][0].config.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+  it('uses another vision model after a transient failure and still detects mismatches', async () => {
+    generateContent.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce(result('Ana Reyes'));
+    const { response, data } = await inspect();
+    expect(response.status).toBe(200);
+    expect(data.inspection.overall_status).toBe('issues_found');
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(generateContent.mock.calls[0][0].model).not.toBe(generateContent.mock.calls[1][0].model);
+    expect(generateContent.mock.calls[1][0].config.httpOptions.timeout).toBeLessThanOrEqual(45000);
+  });
+  it.each([401, 403, 429, 400])('does not retry credential, quota, or invalid-file errors (%s)', async (status) => {
+    generateContent.mockRejectedValue({ status });
+    await inspect();
+    expect(generateContent).toHaveBeenCalledOnce();
   });
 });

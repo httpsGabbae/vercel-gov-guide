@@ -1420,20 +1420,27 @@ INSPECTION INSTRUCTIONS:
   ]
 }`;
 
-        const candidateModels = [process.env.GEMINI_INSPECTION_MODEL || GEMINI_FLASH_MODEL];
+        const candidateModels = [...new Set([
+          process.env.GEMINI_INSPECTION_MODEL || 'gemini-3.5-flash',
+          process.env.GEMINI_INSPECTION_FALLBACK_MODEL || GEMINI_FLASH_MODEL,
+        ])];
+        const inspectionDeadline = Date.now() + 45000;
 
         let visionResponseText = '';
-        for (const candidateModel of candidateModels) {
+        for (const [modelIndex, candidateModel] of candidateModels.entries()) {
+          const hasFallback = modelIndex < candidateModels.length - 1;
+          const remainingMs = Math.max(1, inspectionDeadline - Date.now());
+          const attemptTimeout = hasFallback ? Math.min(25000, remainingMs) : remainingMs;
           try {
             const callPromise = ai.models.generateContent({
               model: candidateModel,
               config: {
-                // Allow dense documents time to finish, but bound all attempts below
-                // the route's 60-second limit. Retry only transient server failures.
-                abortSignal: AbortSignal.timeout(45000),
+                // Reserve time for another vision model when a provider is overloaded.
+                // The combined attempts stay below the route's 60-second limit.
+                abortSignal: AbortSignal.timeout(attemptTimeout),
                 httpOptions: {
-                  timeout: 45000,
-                  retryOptions: { attempts: 2, httpStatusCodes: [500, 502, 503, 504] },
+                  timeout: attemptTimeout,
+                  retryOptions: { attempts: 1 },
                 },
               },
               contents: [
@@ -1456,6 +1463,8 @@ INSPECTION INSTRUCTIONS:
             console.warn('[api/inspect] Document service failed', {
               status: failure.providerStatus, code: failure.code, model: candidateModel,
             });
+            if (hasFallback && Date.now() < inspectionDeadline &&
+              [0, 404, 408, 500, 502, 503, 504].includes(failure.providerStatus)) continue;
             return NextResponse.json({ ok: false, code: failure.code, message: failure.message, inspection: null }, { status: failure.status });
           }
         }
