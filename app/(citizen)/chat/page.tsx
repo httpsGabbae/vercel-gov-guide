@@ -44,6 +44,7 @@ import { DfaAppointmentView } from '@/components/dfa/DfaAppointmentView';
 import { DpwhProjectsView } from '@/components/dpwh/DpwhProjectsView';
 import { RequestStatusSection } from '@/components/citizen/RequestStatusSection';
 import { type CitizenServiceRequest, getCitizenRequests } from '@/lib/citizen/requests';
+import { encodeInspectionFile } from '@/lib/citizen/inspection-upload';
 import { parseResponseJson, safeResponseJson } from '@/lib/utils';
 import {
   reconcileChecklistWithVault,
@@ -3484,6 +3485,7 @@ export default function CitizenChatPage() {
       customFiles?: File[],
       serviceOverride?: string,
       fromOpenInChat = false,
+      attachmentError?: string,
     ) => {
       const filesToSend = customFiles ?? attachedFiles;
       const textToSend = (customText ?? inputText).trim();
@@ -3660,13 +3662,8 @@ export default function CitizenChatPage() {
 
 
       try {
-        const encodedAttachments = await Promise.all(
-          filesToSend.map(async (f) => ({
-            name: f.name,
-            type: f.type,
-            dataUrl: f.type.startsWith('image/') ? await fileToDataUrl(f) : undefined,
-          })),
-        );
+        if (attachmentError) throw new Error(attachmentError);
+        const encodedAttachments = await Promise.all(filesToSend.map(f => encodeInspectionFile(f, fileToDataUrl)));
 
         // Call inspection API directly and wait naturally for processing to finish
         const res = await fetch('/api/inspect', {
@@ -3676,7 +3673,7 @@ export default function CitizenChatPage() {
             text: textToSend,
             attachments: encodedAttachments,
             applicant,
-            savedFiles,
+            savedFiles: savedFiles.map(file => ({ ...file, preview_url: undefined })),
             language,
             serviceCode: serviceOverride,
           }),
@@ -3955,7 +3952,8 @@ export default function CitizenChatPage() {
           }
           return next;
         });
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Inspection failed. Please try again.';
         setThreads((prev) =>
           prev.map((t) =>
             t.id !== threadId
@@ -3968,7 +3966,7 @@ export default function CitizenChatPage() {
                       ...m,
                       phase: 'done' as const,
                       steps: [],
-                      error: 'Something went wrong while inspecting. Please try again.',
+                      error: message,
                     }
                     : m,
                 ),
@@ -3996,13 +3994,14 @@ export default function CitizenChatPage() {
       }
       try {
         const res = await fetch(path);
+        if (!res.ok) throw new Error("Saved document is unavailable. Please upload it again.");
         const blob = await res.blob();
         const file = new File([blob], name, { type });
         setView('chat');
         await sendTurn(promptText, [file], undefined, fromOpenInChat);
       } catch {
         setView('chat');
-        await sendTurn(promptText, undefined, undefined, fromOpenInChat);
+        await sendTurn(promptText, [], undefined, fromOpenInChat, 'Saved document could not be loaded. Please upload it again.');
       }
     },
     [busy, sendTurn],
@@ -4012,7 +4011,9 @@ export default function CitizenChatPage() {
     async (files: File[], docTypeOverride?: string, serviceCodeOverride?: string) => {
       const initialEntries: SavedVaultFile[] = await Promise.all(
         files.map(async (f, idx) => {
-          const dataUrl = f.type.startsWith('image/') ? await fileToDataUrl(f) : undefined;
+          let uploadError = '';
+          const encoded = await encodeInspectionFile(f, fileToDataUrl).catch(error => { uploadError = error.message; return null; });
+          const dataUrl = encoded?.dataUrl;
           const lower = f.name.toLowerCase();
           const docType =
             docTypeOverride ||
@@ -4028,11 +4029,11 @@ export default function CitizenChatPage() {
             document_type: `${f.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')} (${docType})`,
             service_code: serviceCodeOverride || 'NBI_CLEARANCE',
             size_label: `${kb} KB`,
-            mime_type: f.type || 'image/png',
+            mime_type: encoded?.type || f.type,
             preview_url: dataUrl,
             uploaded_at: new Date().toISOString(),
-            status: 'inspecting' as const,
-            issue_summary: 'AI checking document...',
+            status: encoded ? 'inspecting' as const : 'uninspected' as const,
+            issue_summary: uploadError || 'AI checking document...',
           };
         }),
       );
@@ -4042,6 +4043,7 @@ export default function CitizenChatPage() {
 
       // Automatically inspect each file with the AI
       for (const entry of initialEntries) {
+        if (entry.status === 'uninspected') continue;
         try {
           const res = await fetch('/api/inspect', {
             method: 'POST',
@@ -4091,39 +4093,10 @@ export default function CitizenChatPage() {
             if (report) {
               setInspections((prev) => [report, ...prev.filter((r) => r.id !== report.id)]);
 
-              const isProfileBlank =
-                !applicant.display_name?.trim() ||
-                applicant.display_name === 'Guest Account' ||
-                applicant.display_name === 'Citizen Account' ||
-                applicant.role === 'new_citizen' ||
-                !applicant.birth_date;
-
-              const realIssues = report.issues.filter((iss) => {
-                if (iss.category === 'valid') return false;
-                const text = `${iss.title || ''} ${iss.detail || ''}`.toLowerCase();
-                // Suppress demo name mismatch on non-jobseeker accounts
-                if (applicant.role !== 'jobseeker' && text.includes('juan santos dela cruz')) {
-                  return false;
-                }
-                if (
-                  isProfileBlank &&
-                  (text.includes('profile does not specify') ||
-                    text.includes('full name not provided') ||
-                    text.includes('applicant full name') ||
-                    text.includes('update your applicant profile') ||
-                    text.includes('profile is empty') ||
-                    text.includes('name mismatch') ||
-                    text.includes('does not match the applicant profile'))
-                ) {
-                  return false;
-                }
-                return true;
-              });
-
+              const realIssues = report.issues.filter(iss => iss.category !== 'valid');
               const counts = report.summary_counts || { expired: 0, mismatch: 0, missing: 0 };
-              const hasIssues =
-                (report.overall_status === 'issues_found' && realIssues.length > 0) ||
-                (counts.expired > 0 && !entry.name.toLowerCase().includes('psa') && !entry.name.toLowerCase().includes('birth'));
+              const hasIssues = report.overall_status === 'issues_found' || realIssues.length > 0 ||
+                counts.expired > 0 || counts.mismatch > 0 || counts.missing > 0;
 
               if (hasIssues) {
                 const criticalIssue =
@@ -4155,92 +4128,7 @@ export default function CitizenChatPage() {
                   return next;
                 });
               } else {
-                // Document is valid and counter-ready: establish / confirm personal information
-                if (report.fields && Array.isArray(report.fields)) {
-                  const updatedInfo: Partial<ApplicantProfile> = {};
-
-                  for (const f of report.fields) {
-                    if (!f.value || typeof f.value !== 'string' || !f.value.trim() || f.value === 'Not specified') continue;
-                    const val = f.value.trim();
-                    const k = (f.key || '').toLowerCase();
-                    const lbl = (f.label || '').toLowerCase();
-
-                    if (
-                      (k === 'full_name' || k === 'name' || /full\s*name/i.test(lbl)) &&
-                      val !== 'CITIZEN APPLICANT'
-                    ) {
-                      updatedInfo.display_name = val;
-                      const parts = parseNameParts(val);
-                      updatedInfo.first_name = parts.first_name;
-                      updatedInfo.middle_name = parts.middle_name;
-                      updatedInfo.last_name = parts.last_name;
-                      updatedInfo.suffix = parts.suffix;
-                      updatedInfo.initials = computeInitials(val);
-                    }
-
-                    if (
-                      (k === 'birth_date' || k === 'dob' || /birth/i.test(lbl)) &&
-                      val !== 'Foundational Identity Record'
-                    ) {
-                      updatedInfo.birth_date = val;
-                    }
-
-                    if ((k === 'gender' || k === 'sex' || /gender|sex/i.test(lbl)) && !updatedInfo.gender) {
-                      updatedInfo.gender = /f/i.test(val) ? 'Female' : 'Male';
-                    }
-
-                    if (k === 'father_name' || /father.*name/i.test(lbl)) {
-                      updatedInfo.father_name = val;
-                      const fParts = parseNameParts(val);
-                      if (!updatedInfo.father_first_name) updatedInfo.father_first_name = fParts.first_name;
-                      if (!updatedInfo.father_middle_name) updatedInfo.father_middle_name = fParts.middle_name;
-                      if (!updatedInfo.father_last_name) updatedInfo.father_last_name = fParts.last_name;
-                    }
-                    if (k === 'father_first_name') updatedInfo.father_first_name = val;
-                    if (k === 'father_middle_name') updatedInfo.father_middle_name = val;
-                    if (k === 'father_last_name') updatedInfo.father_last_name = val;
-
-                    if (k === 'mother_maiden_name' || k === 'mother_name' || /mother.*name/i.test(lbl)) {
-                      updatedInfo.mother_maiden_name = val;
-                      const mParts = parseNameParts(val);
-                      if (!updatedInfo.mother_first_name) updatedInfo.mother_first_name = mParts.first_name;
-                      if (!updatedInfo.mother_middle_name) updatedInfo.mother_middle_name = mParts.middle_name;
-                      if (!updatedInfo.mother_last_name) updatedInfo.mother_last_name = mParts.last_name;
-                    }
-                    if (k === 'mother_first_name') updatedInfo.mother_first_name = val;
-                    if (k === 'mother_middle_name') updatedInfo.mother_middle_name = val;
-                    if (k === 'mother_last_name') updatedInfo.mother_last_name = val;
-
-                    if (k === 'barangay' || /barangay/i.test(lbl)) updatedInfo.barangay = val;
-                    if (k === 'city' || /city|municipality/i.test(lbl)) updatedInfo.city = val;
-                    if (k === 'province' || /province/i.test(lbl)) updatedInfo.province = val;
-                    if (k === 'place_of_birth' || /place of birth/i.test(lbl)) updatedInfo.place_of_birth = val;
-                    if (k === 'street_address' || /street/i.test(lbl)) updatedInfo.street_address = val;
-                    if (k === 'residential_address' || /residential|address/i.test(lbl)) updatedInfo.residential_address = val;
-                    if ((k === 'philsys_id' || k === 'id_number' || /philsys|national id/i.test(lbl)) && /\d{4}/.test(val) && !val.includes('••••')) {
-                      updatedInfo.philsys_id = val;
-                      updatedInfo.philsys_card_number = val;
-                    }
-                  }
-
-                  if (updatedInfo.residential_address && (!updatedInfo.barangay || !updatedInfo.city)) {
-                    const addr = parseAddressParts(updatedInfo.residential_address);
-                    if (!updatedInfo.street_address && addr.street) updatedInfo.street_address = addr.street;
-                    if (!updatedInfo.barangay && addr.barangay) updatedInfo.barangay = addr.barangay;
-                    if (!updatedInfo.city && addr.city) updatedInfo.city = addr.city;
-                    if (!updatedInfo.province && addr.province) updatedInfo.province = addr.province;
-                  }
-                  if (updatedInfo.place_of_birth && (!updatedInfo.city || !updatedInfo.province)) {
-                    const pob = parseAddressParts(updatedInfo.place_of_birth);
-                    if (!updatedInfo.city && pob.city) updatedInfo.city = pob.city;
-                    if (!updatedInfo.province && pob.province) updatedInfo.province = pob.province;
-                  }
-
-                  if (Object.keys(updatedInfo).length > 0) {
-                    setApplicant((prev) => ({ ...prev, ...updatedInfo }));
-                  }
-                }
-
+                // Inspection findings never automatically overwrite the saved identity.
                 setSavedFiles((prev) => {
                   const next = prev.map((item) =>
                     item.id === entry.id
@@ -4267,14 +4155,14 @@ export default function CitizenChatPage() {
           console.error('[handleAddVaultFiles] AI Inspection failed for file:', entry.name, err);
         }
 
-        // Fallback if inspection API was unreachable
+        // A failed inspection must never verify a file or satisfy a requirement.
         setSavedFiles((prev) => {
           const next = prev.map((item) =>
             item.id === entry.id
               ? {
                 ...item,
-                status: 'counter_ready' as const,
-                issue_summary: 'All goods',
+                status: 'uninspected' as const,
+                issue_summary: 'Inspection could not be completed. Open in chat for details or retry.',
               }
               : item,
           );
@@ -4307,7 +4195,7 @@ export default function CitizenChatPage() {
         await loadDemoAndSend(vaultFile.preview_url, vaultFile.name, vaultFile.mime_type, prompt, true);
       } else {
         setView('chat');
-        await sendTurn(prompt, undefined, undefined, true);
+        await sendTurn(prompt, [], undefined, true, 'This saved document has no readable file attached. Please upload it again to cross-reference it.');
       }
     },
     [busy, applicant, loadDemoAndSend, sendTurn],

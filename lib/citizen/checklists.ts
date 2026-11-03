@@ -14,7 +14,7 @@ export function isDocumentGoodAndCorrect(
   file: SavedVaultFile,
   inspections?: InspectionReport[],
 ): boolean {
-  if (file.status === 'issues_found' || file.status === 'inspecting') {
+  if (file.status !== 'counter_ready') {
     return false;
   }
   if (file.discrepancy_what) {

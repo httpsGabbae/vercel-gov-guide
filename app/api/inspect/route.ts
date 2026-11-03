@@ -1,3 +1,6 @@
+import { compareDocumentIdentity, usableIdentity } from '@/lib/ai/document-identity';
+export const maxDuration = 60;
+
 import { basicQuestionReply } from '@/lib/ai/basic-questions';
 import { isSocialTurn, socialReply } from '@/lib/ai/social-intent';
 import { NextRequest, NextResponse } from 'next/server';
@@ -1098,9 +1101,10 @@ export async function POST(req: NextRequest) {
     const savedFiles: SavedVaultFile[] =
       !isGuest && Array.isArray(body.savedFiles) ? body.savedFiles : [];
     const language: string = body.language || 'Auto';
-    const isDemoFile = attachments.some((a) =>
-      ['expired-postal-id.png', 'incomplete-brgy-cert.png'].includes(a.name),
+    const isDemoFile = attachments.length > 0 && attachments.every((a) =>
+      ['expired-postal-id.png', 'incomplete-brgy-cert.png'].includes(a.name) && !a.dataUrl?.startsWith('data:'),
     );
+    if (attachments.length > 1) return NextResponse.json({ ok: false, message: 'Upload one document at a time so each document can be inspected.' }, { status: 400 });
     const applicantInput: ApplicantProfile = body.applicant || (isDemoFile ? {
       id: 'app-juan',
       role: 'jobseeker',
@@ -1141,7 +1145,7 @@ export async function POST(req: NextRequest) {
         : applicantInput;
 
     // Learn information from user's chat message to dynamically update My Details (only for signed-in citizens)
-    const learnedDetails = isGuest ? {} : extractLearnedDetails(text);
+    const learnedDetails = isGuest || attachments.length > 0 ? {} : extractLearnedDetails(text);
     const applicant: ApplicantProfile = {
       ...sanitizedInput,
       ...learnedDetails,
@@ -1242,10 +1246,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Step 2: Run requirement & document inspection (Expired / Mismatch / Missing / Valid)
-    let inspection = runDeterministicInspection(text, attachments, applicant, serviceCode);
+    let inspection = attachments.length > 0 && !isDemoFile
+      ? null : runDeterministicInspection(text, attachments, applicant, serviceCode);
 
     // Optional live Gemini multimodal refinement when API key is configured and real user image is uploaded
     const apiKey = process.env.GEMINI_API_KEY;
+
+    if (attachments.length && !isDemoFile && (!apiKey || apiKey === 'your_gemini_api_key_here')) return NextResponse.json({ ok: false, code: 'INSPECTION_NOT_CONFIGURED', inspection: null, message: 'Document inspection is not configured on this deployment. Set GEMINI_API_KEY in the server environment and redeploy.' }, { status: 503 });
 
     let base64Data = '';
     let mimeType = attachments[0]?.type || 'image/jpeg';
@@ -1298,13 +1305,7 @@ export async function POST(req: NextRequest) {
 
         const isJobseekerDemo =
           applicant.role === 'jobseeker' && (applicant.display_name || '').toLowerCase().includes('juan');
-        const isProfileBlank =
-          !applicant.display_name?.trim() ||
-          applicant.display_name.trim().toLowerCase() === 'not specified' ||
-          applicant.display_name === 'Guest Account' ||
-          applicant.display_name === 'Citizen Account' ||
-          applicant.role === 'new_citizen' ||
-          !applicant.birth_date;
+        const isProfileBlank = !usableIdentity(applicant.display_name) && !usableIdentity(applicant.birth_date);
 
         const profileNameForPrompt = isJobseekerDemo
           ? 'Juan Santos Dela Cruz'
@@ -1341,10 +1342,10 @@ INSPECTION INSTRUCTIONS:
      * Date of Birth, Sex
 3. Compare extracted details against the Applicant Profile:
    - CRITICAL FIRST-TIME CITIZEN / UNCONFIRMED PROFILE RULE:
-     If the applicant profile Full Name or Date of Birth is blank, empty, unpopulated, or marked as establishing identity:
+     Evaluate each profile field independently. A missing birth date or new_citizen role MUST NOT suppress a comparison against a populated name. If a particular profile field is blank:
      * DO NOT flag missing profile fields as a mismatch, missing, or discrepancy!
      * NEVER compare the document against "Juan Santos Dela Cruz" or any demo persona unless the applicant profile explicitly states Juan Santos Dela Cruz.
-     * NEVER output "Full Name Mismatch", "Applicant Full Name Not Provided", or "Profile does not specify a full name" as an issue.
+     * Only skip comparison for that blank field. Always flag differences against other populated fields.
      * An empty profile is NOT a document defect. The uploaded document (especially PSA Birth Certificate, PhilSys National ID, DFA Passport) is the foundational primary identity document that ESTABLISHES identity!
      * Validate ONLY the physical document itself: authenticity, legibility, completeness, official seals/signatures, and unexpired status.
      * Extract the recorded name and birth date from the document so it can establish their profile.
@@ -1362,7 +1363,7 @@ INSPECTION INSTRUCTIONS:
    - IF NO ACTUAL DOCUMENT DEFECT IS FOUND (document is authentic, unexpired/lifetime, legible, and matches or establishes profile):
      Set "overall_status": "counter_ready".
      Set "status_message": "All goods".
-     Include an issue with category "valid", title "All goods — Ready for Counter Presentation", detail "Document is authentic, unexpired, and counter-ready. Details extracted to establish your profile.", how_to_fix "Bring original document to the counter."
+     Include an issue with category "valid", title "All goods — Ready for Counter Presentation", detail "Readable information extracted. Review the values and comparisons; authenticity and agency acceptance are not established by this scan.", how_to_fix "Bring original document to the counter."
 5. Output ONLY a valid JSON object matching this schema (no markdown, no extra text):
 {
   "document_title": "string",
@@ -1418,16 +1419,14 @@ INSPECTION INSTRUCTIONS:
   ]
 }`;
 
-        const candidateModels = [
-          'gemini-3.1-flash-lite',
-          'gemini-3.8-flash',
-        ];
+        const candidateModels = [process.env.GEMINI_INSPECTION_MODEL || GEMINI_FLASH_MODEL];
 
         let visionResponseText = '';
         for (const candidateModel of candidateModels) {
           try {
             const callPromise = ai.models.generateContent({
               model: candidateModel,
+              config: { httpOptions: { timeout: 25000 } },
               contents: [
                 {
                   role: 'user',
@@ -1438,21 +1437,25 @@ INSPECTION INSTRUCTIONS:
                 },
               ],
             });
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Model ${candidateModel} timeout after 7000ms`)), 7000)
-            );
-            const resp = await Promise.race([callPromise, timeoutPromise]);
+            const resp = await callPromise;
             if (resp.text) {
               visionResponseText = resp.text;
               break;
             }
           } catch (modelErr) {
-            console.warn(`[api/inspect] Model ${candidateModel} failed, trying next:`, modelErr);
+            const status = Number((modelErr as { status?: number }).status || 0);
+            const message = status === 401 || status === 403
+              ? 'The document service rejected its server credential. Check GEMINI_API_KEY on this deployment and redeploy.'
+              : status === 429 ? 'The document service quota or rate limit was reached. Please retry later.'
+              : status === 404 ? 'The configured inspection model is unavailable. Check GEMINI_INSPECTION_MODEL on the server.'
+              : 'The document service could not complete the scan. Please retry with a clear image or PDF.';
+            console.warn('[api/inspect] Document service failed', { status, model: candidateModel });
+            return NextResponse.json({ ok: false, code: 'INSPECTION_PROVIDER_ERROR', message, inspection: null }, { status: 503 });
           }
         }
 
         const parsed = extractJsonFromModelOutput(visionResponseText);
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === 'object' && (Array.isArray(parsed.fields) || parsed.extracted_details)) {
           if (!Array.isArray(parsed.issues)) parsed.issues = [];
 
           // Filter out false discrepancies caused by empty/unpopulated profile or demo name leaks
@@ -1466,7 +1469,6 @@ INSPECTION INSTRUCTIONS:
 
             // If the user's profile was blank or unconfirmed, remove any name or profile mismatch issue
             if (isProfileBlank && (
-              combined.includes('mismatch') ||
               combined.includes('profile does not specify') ||
               combined.includes('applicant full name not provided') ||
               combined.includes('not specify a full name') ||
@@ -1537,10 +1539,10 @@ INSPECTION INSTRUCTIONS:
               const k = (f.key || '').toLowerCase();
               const lbl = (f.label || '').toLowerCase();
 
-              if ((k === 'full_name' || k === 'name' || k === 'child_name' || /full\s*name|applicant\s*name/i.test(lbl)) && !learnedDetails.display_name && val !== 'CITIZEN APPLICANT') {
+              if ((k === 'full_name' || k === 'name' || k === 'child_name' || /^(full (legal )?name|applicant name|child name)$/i.test(lbl)) && !learnedDetails.display_name && val !== 'CITIZEN APPLICANT') {
                 learnedDetails.display_name = val;
               }
-              if ((k === 'birth_date' || k === 'dob' || k === 'date_of_birth' || /birth/i.test(lbl)) && !learnedDetails.birth_date && val !== 'Foundational Identity Record') {
+              if ((k === 'birth_date' || k === 'dob' || k === 'date_of_birth' || /^(date of birth|birth date)$/i.test(lbl)) && !learnedDetails.birth_date && val !== 'Foundational Identity Record') {
                 learnedDetails.birth_date = val;
               }
               if ((k === 'gender' || k === 'sex' || /gender|sex/i.test(lbl)) && !learnedDetails.gender) {
@@ -1628,38 +1630,6 @@ INSPECTION INSTRUCTIONS:
             if (!learnedDetails.province && pob.province) learnedDetails.province = pob.province;
           }
 
-          // 4. Preserve Cabatic test fixture details ONLY when explicitly testing that file AND user has not set their own citizen profile name
-          const isExplicitCabaticFile = (attachments[0]?.name || '').toLowerCase().includes('cabatic');
-          const hasExistingCitizenProfile = Boolean(
-            applicant.display_name?.trim() &&
-            applicant.display_name !== 'Guest Account' &&
-            applicant.display_name !== 'Citizen Account' &&
-            applicant.role !== 'new_citizen'
-          );
-          if (isExplicitCabaticFile && !hasExistingCitizenProfile) {
-            learnedDetails.display_name = 'Lorraine Lasi Cabatic';
-            learnedDetails.first_name = 'Lorraine';
-            learnedDetails.middle_name = 'Lasi';
-            learnedDetails.last_name = 'Cabatic';
-            learnedDetails.birth_date = '2007-07-23';
-            learnedDetails.father_name = 'Joselito Bernas Cabatic';
-            learnedDetails.father_first_name = 'Joselito';
-            learnedDetails.father_middle_name = 'Bernas';
-            learnedDetails.father_last_name = 'Cabatic';
-            learnedDetails.mother_maiden_name = 'Rowena Tagle Lasi';
-            learnedDetails.mother_first_name = 'Rowena';
-            learnedDetails.mother_middle_name = 'Tagle';
-            learnedDetails.mother_last_name = 'Lasi';
-            learnedDetails.place_of_birth = 'Divine Love General Hospital, Lipa City, Batangas';
-            learnedDetails.city = 'Lipa City';
-            learnedDetails.province = 'Batangas';
-            learnedDetails.barangay = 'Brgy. Santo Toribio';
-            learnedDetails.street_address = 'Purok 5 Sitio Sampalucan';
-            learnedDetails.residential_address = 'Purok 5 Sitio Sampalucan, Brgy. Santo Toribio, Lipa City, Batangas';
-            learnedDetails.philsys_id = '2631-2509-8106-8349';
-            learnedDetails.philsys_card_number = '2631-2509-8106-8349';
-          }
-
           // 5. Ensure all extracted details exist in parsed.fields for the UI scorecard
           if (!Array.isArray(parsed.fields)) parsed.fields = [];
           const ensureField = (key: string, label: string, value?: string) => {
@@ -1726,15 +1696,28 @@ INSPECTION INSTRUCTIONS:
       }
     }
 
+    // Never substitute a filename-based demo result when real document reading fails.
+    if (attachments.length > 0 && !isDemoFile) {
+      const hasReadableIdentity = inspection?.fields.some(f =>
+        ['full_name', 'name', 'child_name', 'child_full_name'].includes(f.key) && usableIdentity(f.value));
+      if (!inspection || !hasReadableIdentity) return NextResponse.json({
+        ok: false, message: 'The document could not be reliably read. No identity comparison was completed. Please retry with a clear image or PDF.',
+        inspection: null, learnedDetails: {},
+      }, { status: 422 });
+      inspection = compareDocumentIdentity(inspection, sanitizedInput);
+      // Uploaded documents are evidence for review, not permission to replace My Details.
+      for (const key of Object.keys(learnedDetails)) delete (learnedDetails as Record<string, unknown>)[key];
+    }
+
     // Step 2.5: Synchronize learnedDetails from inspection.fields (for deterministic or vision inspections)
-    if (inspection && Array.isArray(inspection.fields)) {
+    if (inspection && (attachments.length === 0 || isDemoFile) && Array.isArray(inspection.fields)) {
       for (const f of inspection.fields) {
         if (!f.value || typeof f.value !== 'string' || !f.value.trim() || f.value === 'Not specified') continue;
         const val = f.value.trim();
         const k = (f.key || '').toLowerCase();
         const lbl = (f.label || '').toLowerCase();
 
-        if ((k === 'full_name' || k === 'name' || /full\s*name|applicant\s*name/i.test(lbl)) && !learnedDetails.display_name && val !== 'CITIZEN APPLICANT') {
+        if ((k === 'full_name' || k === 'name' || /^(full (legal )?name|applicant name|child name)$/i.test(lbl)) && !learnedDetails.display_name && val !== 'CITIZEN APPLICANT') {
           learnedDetails.display_name = val;
           const parts = parseNameParts(val);
           if (!learnedDetails.first_name) learnedDetails.first_name = parts.first_name;
@@ -1742,7 +1725,7 @@ INSPECTION INSTRUCTIONS:
           if (!learnedDetails.last_name) learnedDetails.last_name = parts.last_name;
           if (!learnedDetails.suffix) learnedDetails.suffix = parts.suffix;
         }
-        if ((k === 'birth_date' || k === 'dob' || /birth/i.test(lbl)) && !learnedDetails.birth_date && val !== 'Foundational Identity Record') {
+        if ((k === 'birth_date' || k === 'dob' || /^(date of birth|birth date)$/i.test(lbl)) && !learnedDetails.birth_date && val !== 'Foundational Identity Record') {
           learnedDetails.birth_date = val;
         }
         if ((k === 'gender' || k === 'sex' || /gender|sex/i.test(lbl)) && !learnedDetails.gender) {
@@ -1847,12 +1830,12 @@ INSPECTION INSTRUCTIONS:
       } else {
         if (isNewUser) {
           replyText = isFil
-            ? `Magandang balita! Sinuri ko ang iyong **${inspection.document_title}** laban sa opisyal na Citizen's Charter at ito ay **100% Counter-Ready**—walang expired na petsa, malinaw ang impormasyon, at tinatanggap bilang opisyal na Primary ID sa counter. Maaari mong i-save ang mga extracted na detalyeng ito sa **My Details** para sa 1-click na paggamit sa hinaharap!`
-            : `Great news! I inspected your **${inspection.document_title}** against the official Citizen's Charter and confirmed it is **100% Counter-Ready**—unexpired, clear photo and signature block, and accepted as an official Primary ID at government counters. You can save these extracted details to **My Details** for 1-click autofill in future transactions!`;
+            ? `Magandang balita! Sinuri ko ang iyong **${inspection.document_title}** laban sa opisyal na Citizen's Charter at ito ay **No issues detected in this automated review**—walang expired na petsa, malinaw ang impormasyon, at tinatanggap bilang opisyal na Primary ID sa counter. Maaari mong i-save ang mga extracted na detalyeng ito sa **My Details** para sa 1-click na paggamit sa hinaharap!`
+            : `Great news! I inspected your **${inspection.document_title}** against the official Citizen's Charter and confirmed it is **No issues detected in this automated review**in the readable fields. This does not verify authenticity or guarantee agency acceptance. Review the extracted details and any fields that could not be compared. You can save these extracted details to **My Details** for 1-click autofill in future transactions!`;
         } else {
           replyText = isFil
-            ? `Magandang balita! Sinuri ko ang iyong **${inspection.document_title}** gamit ang iyong **My Details** profile (**${applicant.display_name}**) at ito ay **100% Counter-Ready**—walang expired na petsa, tugma ang lahat ng detalye, at kumpleto ang mga impormasyon.`
-            : `Great news! I inspected your **${inspection.document_title}** against your **My Details** profile (**${applicant.display_name}**) and confirmed it is **100% Counter-Ready**—no expired dates, all identity fields match your profile, and no required fields are missing.`;
+            ? `Magandang balita! Sinuri ko ang iyong **${inspection.document_title}** gamit ang iyong **My Details** profile (**${applicant.display_name}**) at ito ay **No issues detected in this automated review**—walang expired na petsa, tugma ang lahat ng detalye, at kumpleto ang mga impormasyon.`
+            : `Great news! I inspected your **${inspection.document_title}** against your **My Details** profile (**${applicant.display_name}**) and confirmed it is **No issues detected in this automated review**—no expired dates, all identity fields match your profile, and no required fields are missing.`;
         }
       }
     } else if (qaAnswer) {
@@ -1865,6 +1848,12 @@ INSPECTION INSTRUCTIONS:
         : (isNewUser
             ? `Here is the official **Requirements Checklist** for **${checklist?.service_name || 'government services'}** based on the Citizen's Charter. You can attach photos or PDFs of your ID and requirements here for an instant AI pre-flight check.`
             : `Here is your official **Requirements Checklist** for **${checklist?.service_name || 'government services'}** personalized with your **My Details** profile (**${applicant.display_name}**). You can manage your saved files, checklists, and inspections in **My Details**, or attach photos/PDFs here for an AI pre-flight check.`);
+    }
+
+    if (inspection && attachments.length > 0 && !isDemoFile) {
+      replyText = inspection.overall_status === 'issues_found'
+        ? (isFil ? 'May mga detalyeng kailangang suriin. Ihambing ang dokumento at ang naka-save na profile sa scorecard. Hindi binago ang iyong My Details.' : 'Some details need review. Compare the document and saved profile in the scorecard. Your My Details were not changed.')
+        : (isFil ? 'Walang nakitang isyu sa nabasang detalye. Ang mga blangkong profile field ay hindi naikumpara. Suriin ang scorecard; hindi nito ginagarantiya ang pagtanggap ng ahensya.' : 'No issues detected in the readable fields. Blank profile fields could not be compared. Review the scorecard; this is not a guarantee of agency acceptance. Your My Details were not changed.');
     }
 
     if (!isGuest && isNewUser && !inspection && !isGreeting && qaAnswer?.includeChecklist !== false) {

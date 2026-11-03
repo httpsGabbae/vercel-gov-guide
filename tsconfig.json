@@ -30,25 +30,18 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.ts",
     "**/*.tsx",
-    "**/*.tsx",
-    ".next-dev-3000/types/**/*.ts",
-    ".next-dev-3000/types/**/*.ts",
-    ".next-dev-3002/types/**/*.ts",
-    ".next-dev-3002/types/**/*.ts",
-    ".next-dev-3003/types/**/*.ts",
-    ".next-dev-3010/types/**/*.ts",
-    ".next-dev-3011/types/**/*.ts",
-    ".next-dev-3011/types/**/*.ts",
-    ".next-dev-3100/types/**/*.ts",
-    ".next-dev-3100/types/**/*.ts",
-    ".next/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    "next-env.d.ts"
+    ".next-dev-3001/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "video",
+    "videos",
+    ".agents",
+    ".next-dev-*/**",
+    ".next-video-capture/**",
+    "extension/dist"
   ]
 }
