@@ -1,7 +1,7 @@
 {
   "version": 1,
   "historyId": "f127be8b-ad9f-4a1c-8468-f25a69acd999",
-  "currentRevision": "00d3e4fa-5480-4ea7-8bb1-0ab28c5ecdbd",
+  "currentRevision": "158ebc73-4c59-41a0-b4da-29fffebcb631",
   "pendingChanges": false,
   "files": {
     ".media/manifest.jsonl": {
@@ -91,10 +91,6 @@
     "redesigned-frame.png": {
       "hash": "9d8bef67836c9d2c869384ba7b8047663b16d21ef122a7eb4df1bc96e54db089",
       "content": "C:\\Users\\doruc\\.cache\\hyperframes\\history\\f127be8b-ad9f-4a1c-8468-f25a69acd999\\blobs\\9d\\9d8bef67836c9d2c869384ba7b8047663b16d21ef122a7eb4df1bc96e54db089"
-    },
-    "reference-kosmos.mov": {
-      "hash": "a5203ac86b0aff07ebd168ec56d9c7170f094bf0bba76b30db156bbd4cb6cc2a",
-      "content": "C:\\Users\\doruc\\.cache\\hyperframes\\history\\f127be8b-ad9f-4a1c-8468-f25a69acd999\\blobs\\a5\\a5203ac86b0aff07ebd168ec56d9c7170f094bf0bba76b30db156bbd4cb6cc2a"
     },
     "reference-sheet.jpg": {
       "hash": "64e13fd4351fbcf6548aa6508b182de51415b34eb72a46c13766e1836161dfa9",
@@ -871,6 +867,21 @@
         "product-final.png": {
           "before": null,
           "after": "C:\\Users\\doruc\\.cache\\hyperframes\\history\\f127be8b-ad9f-4a1c-8468-f25a69acd999\\blobs\\90\\9026030cd8f7df6d4b65bcc25ba63fa42dc598aad8fe3cf58daf4764f4bb5bea"
+        }
+      }
+    },
+    "158ebc73-4c59-41a0-b4da-29fffebcb631": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793731712182,
+      "endedAt": 1793731714187,
+      "files": {
+        "reference-kosmos.mov": {
+          "before": "C:\\Users\\doruc\\.cache\\hyperframes\\history\\f127be8b-ad9f-4a1c-8468-f25a69acd999\\blobs\\a5\\a5203ac86b0aff07ebd168ec56d9c7170f094bf0bba76b30db156bbd4cb6cc2a",
+          "after": null
         }
       }
     }
