@@ -330,21 +330,22 @@ async function b(e) {
 	}
 }
 async function x(e, t = {}) {
-	let n = await l();
-	if (!n.isAuthenticated || !n.accessToken) throw Error("Not signed in.");
-	let r = (r) => fetch(`${n.apiBaseUrl}${e}`, {
+	let n = await l(), r = (e) => {
+		let n = {
+			"Content-Type": "application/json",
+			"x-agency-role": "counter_officer",
+			...t.headers || {}
+		};
+		return e && (n.Authorization = `Bearer ${e}`), n;
+	}, i = (r) => fetch(`${n.apiBaseUrl}${e}`, {
 		...t,
-		headers: {
-			...t.headers || {},
-			Authorization: `Bearer ${r}`
-		}
-	}), i = await r(n.accessToken);
-	if (i.status === 401) {
+		headers: r
+	}), a = await i(r(n.accessToken));
+	if (a.status === 401 && n.refreshToken) {
 		let e = await b(n);
-		if (!e || !e.accessToken) throw await y(), Error("Session expired. Please sign in again.");
-		n = e, i = await r(e.accessToken);
+		e && e.accessToken && (n = e, a = await i(r(e.accessToken)));
 	}
-	return i;
+	return a;
 }
 var S = null;
 async function C(e) {
@@ -468,29 +469,43 @@ async function w(e) {
 				vault: r
 			};
 		}
-		case "FETCH_AGENCY_REQUESTS": {
+		case "FETCH_AGENCY_REQUESTS": try {
 			let t = e.payload?.q?.trim() || "", n = await x(`/api/agency/requests${t ? `?q=${encodeURIComponent(t)}` : ""}`), r = await n.json();
 			if (!n.ok || !r.success) throw Error(r.error || "Failed to load agency requests");
 			return {
 				success: !0,
 				data: r.data
 			};
+		} catch (e) {
+			return {
+				success: !1,
+				error: e.message || "Failed to load agency requests",
+				data: []
+			};
 		}
-		case "UPDATE_REQUEST_STATUS": {
+		case "UPDATE_REQUEST_STATUS": try {
 			let t = await x("/api/agency/requests", {
 				method: "PATCH",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(e.payload)
 			}), n = await t.json();
 			if (!t.ok || !n.success) throw Error(n.error || "Failed to update agency request status");
-			return chrome.notifications.create({
-				type: "basic",
-				iconUrl: "icons/icon-128.png",
-				title: "GovGuide Agency Bridge",
-				message: `${e.payload.requestId} updated: ${n.data?.statusLabel || "Saved"}`
-			}), {
+			try {
+				chrome.notifications.create({
+					type: "basic",
+					iconUrl: "icons/icon-128.png",
+					title: "GovGuide Agency Bridge",
+					message: `${e.payload.requestId} updated: ${n.data?.statusLabel || "Saved"}`
+				});
+			} catch {}
+			return {
 				success: !0,
 				data: n.data
+			};
+		} catch (e) {
+			return {
+				success: !1,
+				error: e.message || "Failed to update agency request status"
 			};
 		}
 		case "SHOW_NOTIFICATION": return chrome.notifications.create({

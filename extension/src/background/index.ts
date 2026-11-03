@@ -194,28 +194,31 @@ async function tryRefresh(session: ExtensionSession): Promise<ExtensionSession |
  */
 async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   let session = await getSession();
-  if (!session.isAuthenticated || !session.accessToken) {
-    throw new Error('Not signed in.');
-  }
+  const buildHeaders = (token?: string): Record<string, string> => {
+    const h: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-agency-role': 'counter_officer',
+      ...((init.headers as Record<string, string>) || {}),
+    };
+    if (token) {
+      h['Authorization'] = `Bearer ${token}`;
+    }
+    return h;
+  };
 
-  const doFetch = (token: string) =>
+  const doFetch = (headers: Record<string, string>) =>
     fetch(`${session.apiBaseUrl}${path}`, {
       ...init,
-      headers: {
-        ...(init.headers || {}),
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
     });
 
-  let res = await doFetch(session.accessToken);
-  if (res.status === 401) {
+  let res = await doFetch(buildHeaders(session.accessToken));
+  if (res.status === 401 && session.refreshToken) {
     const refreshed = await tryRefresh(session);
-    if (!refreshed || !refreshed.accessToken) {
-      await clearAuth();
-      throw new Error('Session expired. Please sign in again.');
+    if (refreshed && refreshed.accessToken) {
+      session = refreshed;
+      res = await doFetch(buildHeaders(refreshed.accessToken));
     }
-    session = refreshed;
-    res = await doFetch(refreshed.accessToken);
   }
   return res;
 }
@@ -431,33 +434,43 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
       return { success: true, vault: synced };
     }
     case 'FETCH_AGENCY_REQUESTS': {
-      const q = msg.payload?.q?.trim() || '';
-      const res = await authedFetch(`/api/agency/requests${q ? `?q=${encodeURIComponent(q)}` : ''}`);
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to load agency requests');
+      try {
+        const q = msg.payload?.q?.trim() || '';
+        const res = await authedFetch(`/api/agency/requests${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to load agency requests');
+        }
+        return { success: true, data: json.data };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to load agency requests', data: [] };
       }
-      return { success: true, data: json.data };
     }
     case 'UPDATE_REQUEST_STATUS': {
-      const res = await authedFetch('/api/agency/requests', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg.payload),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to update agency request status');
+      try {
+        const res = await authedFetch('/api/agency/requests', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg.payload),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to update agency request status');
+        }
+
+        try {
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon-128.png',
+            title: 'GovGuide Agency Bridge',
+            message: `${msg.payload.requestId} updated: ${json.data?.statusLabel || 'Saved'}`,
+          });
+        } catch {}
+
+        return { success: true, data: json.data };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to update agency request status' };
       }
-
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-128.png',
-        title: 'GovGuide Agency Bridge',
-        message: `${msg.payload.requestId} updated: ${json.data?.statusLabel || 'Saved'}`,
-      });
-
-      return { success: true, data: json.data };
     }
     case 'SHOW_NOTIFICATION': {
       chrome.notifications.create({

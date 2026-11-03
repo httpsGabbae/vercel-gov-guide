@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CitizenVaultData, ExtensionSession, AgencyServiceRequest, ProcessStatus } from '../types';
+import { generateOfficialNoticeLetter, type GeneratedLetterResult } from '../lib/letter-generator';
+import {
+  type CitizenChatMessage,
+  streamCitizenChat,
+  loadStoredCitizenChat,
+  saveStoredCitizenChat,
+  INITIAL_GREETING_MESSAGE,
+} from '../lib/citizen-chat';
 
 const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
   { value: 'on_process', label: 'On Process' },
@@ -19,6 +27,7 @@ export function App() {
   const [vault, setVault] = useState<CitizenVaultData | null>(null);
   const [editFormData, setEditFormData] = useState<CitizenVaultData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [autofilling, setAutofilling] = useState(false);
@@ -44,6 +53,18 @@ export function App() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionRef = useRef<ExtensionSession | null>(null);
 
+  // Agency AI Letter Drafter (Chatbot) States
+  const [aiKeywords, setAiKeywords] = useState('');
+  const [aiGeneratedLetter, setAiGeneratedLetter] = useState<GeneratedLetterResult | null>(null);
+  const [aiIsEditingLetter, setAiIsEditingLetter] = useState(false);
+  const [aiLetterDraft, setAiLetterDraft] = useState('');
+
+  // Citizen Mini Chatbot States
+  const [chatMessages, setChatMessages] = useState<CitizenChatMessage[]>([INITIAL_GREETING_MESSAGE]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
@@ -57,6 +78,10 @@ export function App() {
     setSelectedReq(req);
     setProcessStatus(req?.processStatus || 'on_process');
     setNoteDraft('');
+    setAiKeywords('');
+    setAiGeneratedLetter(null);
+    setAiIsEditingLetter(false);
+    setAiLetterDraft('');
   };
 
   const fetchAgencyRequests = useCallback((q: string) => {
@@ -308,6 +333,89 @@ export function App() {
   };
 
   // ---------------------------------------------------------------------------
+  // Citizen Mini Chatbot Handlers
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    loadStoredCitizenChat().then((msgs) => {
+      if (msgs && msgs.length > 0) {
+        setChatMessages(msgs);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  const handleSendChatMessage = (overrideText?: string) => {
+    const text = (overrideText !== undefined ? overrideText : chatInput).trim();
+    if (!text || isChatLoading) return;
+
+    const userMsg: CitizenChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    };
+
+    const assistantMsgId = `asst-${Date.now()}`;
+    const placeholderAssistantMsg: CitizenChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedMessages = [...chatMessages, userMsg, placeholderAssistantMsg];
+    setChatMessages(updatedMessages);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    let accumulatedContent = '';
+
+    streamCitizenChat({
+      messages: [...chatMessages, userMsg],
+      apiBaseUrl: session?.apiBaseUrl || 'http://localhost:3000',
+      onToken: (token) => {
+        accumulatedContent += token;
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, content: accumulatedContent } : m))
+        );
+      },
+      onSources: (sources) => {
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, sources } : m))
+        );
+      },
+      onGuardrailBlocked: (category) => {
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, guardrailBlocked: true, guardrailCategory: category as any } : m))
+        );
+      },
+      onDone: () => {
+        setIsChatLoading(false);
+        setChatMessages((prev) => {
+          saveStoredCitizenChat(prev);
+          return prev;
+        });
+      },
+      onError: () => {
+        setIsChatLoading(false);
+      },
+    });
+  };
+
+  const handleClearCitizenChat = () => {
+    const initial = [INITIAL_GREETING_MESSAGE];
+    setChatMessages(initial);
+    saveStoredCitizenChat(initial);
+    flash({ text: 'Chat history reset.', type: 'success' }, 2000);
+  };
+
+  // ---------------------------------------------------------------------------
   // Agency side
   // ---------------------------------------------------------------------------
 
@@ -374,6 +482,47 @@ export function App() {
         if (ok) setNoteDraft('');
       },
       `${selectedReq.id} set to ${processLabel(processStatus)}. Citizen notified.`
+    );
+  };
+
+  const handleDraftLetter = (overrideKeywords?: string) => {
+    const kw = (overrideKeywords !== undefined ? overrideKeywords : aiKeywords).trim();
+    if (!kw || !selectedReq) return;
+    const result = generateOfficialNoticeLetter({
+      keywords: kw,
+      citizenName: selectedReq.citizenName || 'Citizen Applicant',
+      serviceTitle: selectedReq.serviceTitle,
+      referenceNumber: selectedReq.referenceNumber,
+      agencyCode: selectedReq.agencyCode,
+      agencyName: selectedReq.agencyName,
+      officerName: session?.fullName || 'Consular Officer Maria Teresa Gomez',
+      officerRole: 'Supervising Verification Officer',
+      location: selectedReq.location,
+    });
+    setAiGeneratedLetter(result);
+    setAiLetterDraft(result.letterText);
+    setProcessStatus(result.suggestedStatus);
+    setAiIsEditingLetter(false);
+    flash({ text: `Drafted official letter for ${selectedReq.citizenName}.`, type: 'success' }, 3000);
+  };
+
+  const handleSendAiLetter = () => {
+    if (!selectedReq || !aiLetterDraft) return;
+    setIsUpdating(true);
+    pushRequestUpdate(
+      {
+        processStatus: aiGeneratedLetter?.suggestedStatus || processStatus,
+        note: aiLetterDraft,
+        appointmentSchedule: aiGeneratedLetter?.appointmentSchedule || selectedReq.appointmentSchedule,
+      },
+      (ok) => {
+        setIsUpdating(false);
+        if (ok) {
+          setAiKeywords('');
+          flash({ text: `Official email letter dispatched to ${selectedReq.citizenName}'s notifications!`, type: 'success' }, 4500);
+        }
+      },
+      `Official email letter sent directly to ${selectedReq.citizenName}'s notifications!`
     );
   };
 
@@ -510,15 +659,6 @@ export function App() {
     return (
       <div className="popup-container">
         {header}
-
-        <div className="sync-status-bar">
-          <div className="active-profile-chip" title={session?.email}>
-            <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {session?.fullName || session?.email}
-            </span>
-          </div>
-        </div>
-
         {banner}
 
         <div className="tab-content">
@@ -602,6 +742,158 @@ export function App() {
                 })}
               </div>
 
+              {/* AI Chatbot: Keyword-to-Official Letter Engine */}
+              <div className="agency-ai-card">
+                <div className="agency-ai-header">
+                  <div className="agency-ai-title">
+                    <span>🤖</span> AI Notice Drafter (Keywords → Letter)
+                  </div>
+                  <span className="agency-ai-badge">RA 11032 Grounded</span>
+                </div>
+
+                <p style={{ fontSize: '10.5px', color: '#64748b', margin: '0 0 8px 0', lineHeight: 1.35 }}>
+                  Enter keywords or counter notes. AI generates a standardized Citizen&apos;s Charter notice sent directly to the citizen&apos;s notifications &amp; email.
+                </p>
+
+                {/* Preset Keywords */}
+                <div className="keyword-preset-row">
+                  <button
+                    type="button"
+                    className="keyword-chip"
+                    onClick={() => {
+                      setAiKeywords('expired ID, need 2 valid government IDs');
+                      handleDraftLetter('expired ID, need 2 valid government IDs');
+                    }}
+                  >
+                    <span>⚠️</span> Expired / Missing ID
+                  </button>
+                  <button
+                    type="button"
+                    className="keyword-chip"
+                    onClick={() => {
+                      setAiKeywords('appointment scheduled Counter 3 Nov 10 10:00 AM biometrics');
+                      handleDraftLetter('appointment scheduled Counter 3 Nov 10 10:00 AM biometrics');
+                    }}
+                  >
+                    <span>🗓️</span> Counter Biometrics
+                  </button>
+                  <button
+                    type="button"
+                    className="keyword-chip"
+                    onClick={() => {
+                      setAiKeywords('unreadable PSA record, submit birth cert with clear registry number');
+                      handleDraftLetter('unreadable PSA record, submit birth cert with clear registry number');
+                    }}
+                  >
+                    <span>📑</span> PSA Record Issue
+                  </button>
+                  <button
+                    type="button"
+                    className="keyword-chip"
+                    onClick={() => {
+                      setAiKeywords('approved and printed, ready for pick up at counter or courier delivery');
+                      handleDraftLetter('approved and printed, ready for pick up at counter or courier delivery');
+                    }}
+                  >
+                    <span>✅</span> Ready for Release
+                  </button>
+                </div>
+
+                {/* Keyword Input & Action */}
+                <div className="ai-input-row">
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Keywords: e.g. 'expired ID, need 2 valid IDs, Counter 3 Nov 5 10am'..."
+                    value={aiKeywords}
+                    onChange={(e) => setAiKeywords(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleDraftLetter();
+                      }
+                    }}
+                    style={{ flex: 1, margin: 0, fontSize: '11px' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-draft-letter"
+                    onClick={() => handleDraftLetter()}
+                    disabled={!aiKeywords.trim()}
+                  >
+                    Draft ✨
+                  </button>
+                </div>
+
+                {/* Generated Letter Preview Card */}
+                {aiGeneratedLetter && (
+                  <div className="official-letter-card">
+                    <div className="official-letter-header">
+                      <span className="letterhead-flag">🇵🇭</span>
+                      <div className="letterhead-title">{aiGeneratedLetter.agency}</div>
+                      <div className="letterhead-sub">REPUBLIC OF THE PHILIPPINES · CITIZEN&apos;S CHARTER NOTICE</div>
+                    </div>
+
+                    <div className="official-letter-meta">
+                      <span>Ref: <strong>{selectedReq.referenceNumber}</strong></span>
+                      <span>Date: {aiGeneratedLetter.date}</span>
+                    </div>
+
+                    <div className="official-letter-subject">
+                      Subject: {aiGeneratedLetter.subject}
+                    </div>
+
+                    {aiIsEditingLetter ? (
+                      <textarea
+                        rows={7}
+                        className="form-input"
+                        value={aiLetterDraft}
+                        onChange={(e) => setAiLetterDraft(e.target.value)}
+                        style={{
+                          width: '100%',
+                          fontFamily: 'ui-monospace, monospace',
+                          fontSize: '10px',
+                          lineHeight: 1.4,
+                          margin: '4px 0 8px 0',
+                        }}
+                      />
+                    ) : (
+                      <div className="official-letter-body">
+                        {aiLetterDraft}
+                      </div>
+                    )}
+
+                    <div className="letter-action-row">
+                      <button
+                        type="button"
+                        className="btn-send-letter"
+                        onClick={handleSendAiLetter}
+                        disabled={isUpdating}
+                      >
+                        {isUpdating ? 'Sending...' : '📨 Send Email Notice to Citizen'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-edit-letter"
+                        onClick={() => setAiIsEditingLetter(!aiIsEditingLetter)}
+                      >
+                        {aiIsEditingLetter ? '💾 Done' : '✏️ Edit'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-edit-letter"
+                        onClick={() => {
+                          setAiGeneratedLetter(null);
+                          setAiLetterDraft('');
+                        }}
+                      >
+                        🔄 Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Notes */}
               <span className="section-label" style={{ marginTop: 12 }}>Notes</span>
               {selectedReq.notes && selectedReq.notes.length > 0 ? (
@@ -658,17 +950,6 @@ export function App() {
   return (
     <div className="popup-container">
       {header}
-
-      <div className="sync-status-bar">
-        <div className="active-profile-chip" title="Active citizen profile">
-          <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {vault && (vault.firstName || vault.lastName)
-              ? `${vault.firstName} ${vault.lastName}`.trim()
-              : (session?.fullName || 'Citizen Profile')}
-          </span>
-        </div>
-      </div>
-
       {banner}
 
       <div className="tab-content">
@@ -704,8 +985,12 @@ export function App() {
 
             {/* Profile Card */}
             <div className="vault-card">
-              <div className="card-header-row">
-                <div className="card-header-left">
+              <div className={`card-header-row ${!isProfileExpanded && !isEditing ? 'collapsed' : ''}`}>
+                <div
+                  className="card-header-left clickable"
+                  onClick={() => setIsProfileExpanded(!isProfileExpanded)}
+                  title={isProfileExpanded ? 'Click to collapse details' : 'Click to expand details'}
+                >
                   <div className="avatar-initials">{getInitials(vault)}</div>
                   <div>
                     <div className="card-title-name">
@@ -717,18 +1002,43 @@ export function App() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => {
-                    setIsEditing(!isEditing);
-                    setEditFormData(vault);
-                  }}
-                  className={`edit-toggle-btn ${isEditing ? 'active' : ''}`}
-                >
-                  <span>{isEditing ? 'Cancel' : 'Edit'}</span>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(!isEditing);
+                      if (!isProfileExpanded) setIsProfileExpanded(true);
+                      setEditFormData(vault);
+                    }}
+                    className={`edit-toggle-btn ${isEditing ? 'active' : ''}`}
+                  >
+                    <span>{isEditing ? 'Cancel' : 'Edit'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileExpanded(!isProfileExpanded)}
+                    className="collapse-toggle-btn"
+                    title={isProfileExpanded ? 'Collapse details' : 'Expand all details'}
+                    aria-expanded={isProfileExpanded}
+                  >
+                    <span>{isProfileExpanded ? 'Less' : 'More'}</span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        display: 'inline-block',
+                        transition: 'transform 0.2s ease',
+                        transform: isProfileExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      }}
+                    >
+                      ▼
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              {!isEditing ? (
+              {(isProfileExpanded || isEditing) && (
+                <>
+                  {!isEditing ? (
                 <>
                   {/* Identity Grid */}
                   <div className="info-grid">
@@ -875,6 +1185,81 @@ export function App() {
                   </div>
                 )
               )}
+                </>
+              )}
+            </div>
+
+            {/* Citizen Mini Chatbot (Embedded RAG & RA 11032 Guardrails) */}
+            <div className="citizen-mini-chat-card">
+              <div className="mini-chat-header">
+                <div className="mini-chat-title">
+                  GovGuidePH ChatBot
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleClearCitizenChat}
+                    className="btn-clear-chat"
+                    title="Clear chat history"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Thread */}
+              <div className="mini-chat-thread">
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className={`mini-chat-bubble ${msg.role}`}>
+                    <div className="mini-chat-content">
+                      {msg.content || (isChatLoading && msg.role === 'assistant' ? 'Nagiisip...' : '')}
+                    </div>
+
+                    {msg.guardrailBlocked && (
+                      <div className="mini-guardrail-banner">
+                        <span>🛡️</span> Guardrail Active: {msg.guardrailCategory || 'RA 11032 Anti-Fixer Policy'}
+                      </div>
+                    )}
+
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mini-chat-sources">
+                        {msg.sources.map((s, idx) => (
+                          <span key={idx} className="mini-source-chip" title={`${s.service} · ${s.section || ''}`}>
+                            📖 {s.agency}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Input Row */}
+              <div className="mini-chat-input-row">
+                <input
+                  type="text"
+                  className="mini-chat-input"
+                  placeholder="Tanong sa requirements, valid IDs, fees (e.g. 'DFA passport')..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendChatMessage();
+                    }
+                  }}
+                  disabled={isChatLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSendChatMessage()}
+                  disabled={isChatLoading || !chatInput.trim()}
+                  className="btn-mini-send"
+                >
+                  {isChatLoading ? '...' : 'Send ➤'}
+                </button>
+              </div>
             </div>
           </>
         )}

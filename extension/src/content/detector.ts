@@ -616,6 +616,12 @@ export function scanPageForFields(vault: CitizenVaultData): DetectionSummary {
         if (rule.modelPattern.test(lw.model)) {
           const val = getVaultValue(vault, rule.fieldKey);
           if (val) {
+            if (el instanceof HTMLInputElement && el.type === 'radio') {
+              const optText = getRadioButtonOptionText(el);
+              if (!matchesRadioValue(rule.fieldKey, optText, val)) {
+                return;
+              }
+            }
             const selector = generateUniqueSelector(el, index);
             fields.push({
               id: `govguide-field-${index}`,
@@ -642,6 +648,12 @@ export function scanPageForFields(vault: CitizenVaultData): DetectionSummary {
       if (isMatch) {
         const val = getVaultValue(vault, rule.fieldKey);
         if (val) {
+          if (el instanceof HTMLInputElement && el.type === 'radio') {
+            const optText = getRadioButtonOptionText(el);
+            if (!matchesRadioValue(rule.fieldKey, optText, val)) {
+              continue;
+            }
+          }
           const selector = generateUniqueSelector(el, index);
           fields.push({
             id: `govguide-field-${index}`,
