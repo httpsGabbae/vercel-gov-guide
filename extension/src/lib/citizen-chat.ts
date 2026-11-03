@@ -267,6 +267,7 @@ export async function streamCitizenChat({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-extension-id': 'govguide-extension',
       },
       body: JSON.stringify(payload),
     });

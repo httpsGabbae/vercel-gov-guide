@@ -126,13 +126,20 @@ async function initialize() {
     }
   });
 
-  // If on GovGuide web application, read stored active applicant and push immediately
+  // If on GovGuide web application, register origin and push immediately
   if (
     typeof window !== 'undefined' &&
     (window.location.origin.includes('localhost') ||
       window.location.origin.includes('127.0.0.1') ||
       window.location.origin.includes('govguide'))
   ) {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'SET_SESSION',
+        payload: { apiBaseUrl: window.location.origin },
+      });
+    } catch {}
+
     try {
       const rawStored = localStorage.getItem('govguide_active_applicant');
       const activeId = localStorage.getItem('govguide_active_citizen_id');
@@ -218,7 +225,9 @@ function pushWebAuthIfChanged() {
     chrome.runtime.sendMessage(
       {
         type: 'SYNC_WEB_AUTH',
-        payload: tokens ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : { signedOut: true },
+        payload: tokens
+          ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, apiBaseUrl: window.location.origin }
+          : { signedOut: true, apiBaseUrl: window.location.origin },
       },
       () => {
         void chrome.runtime.lastError;

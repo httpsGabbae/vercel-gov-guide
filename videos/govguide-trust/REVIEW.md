@@ -1,0 +1,1 @@
+Actual local app screenshots; camera, cursor, and labels are editorial overlays. Not an uninterrupted screen recording. Reviewed phone sheet. Fixed hidden-state flash and reduced citation zoom to preserve full line. No invented agency records. Built-in sample ID only. Captures 540x960, upscaled; fine text softer than native 1080. No music or narration.

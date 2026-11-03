@@ -1,0 +1,861 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 18,
+    "findings": [
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 1.667,
+        "selector": "#q-p1 > div:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 79.16,
+          "top": 886.14,
+          "right": 247.42,
+          "bottom": 973.99,
+          "width": 168.26,
+          "height": 87.85
+        },
+        "containerSelector": "#q-p3",
+        "text": "REQUEST",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.33,
+        "dataAttributes": {},
+        "sourceFile": "compositions/question.html",
+        "bbox": {
+          "x": 79.16,
+          "y": 886.14,
+          "width": 168.26,
+          "height": 87.85
+        },
+        "firstSeen": 1.667,
+        "lastSeen": 1.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          1.667
+        ]
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 1.667,
+        "selector": "#q-p2 > div:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 431.24,
+          "top": 695.6,
+          "right": 599.99,
+          "bottom": 775.78,
+          "width": 168.75,
+          "height": 80.18
+        },
+        "containerSelector": "#q-p3",
+        "text": "REQUEST",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.15,
+        "dataAttributes": {},
+        "sourceFile": "compositions/question.html",
+        "bbox": {
+          "x": 431.24,
+          "y": 695.6,
+          "width": 168.75,
+          "height": 80.18
+        },
+        "firstSeen": 1.667,
+        "lastSeen": 1.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          1.667
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 4.358,
+        "selector": "#question > div:nth-of-type(1) > h1:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 100,
+          "top": 186,
+          "right": 744.11,
+          "bottom": 431.75,
+          "width": 644.11,
+          "height": 245.75
+        },
+        "containerSelector": "#q-p2 > div:nth-of-type(1)",
+        "text": "One request. Too much guesswork.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply.",
+        "dataAttributes": {},
+        "sourceFile": "compositions/question.html",
+        "bbox": {
+          "x": 100,
+          "y": 186,
+          "width": 644.11,
+          "height": 245.75
+        },
+        "firstSeen": 4.358,
+        "lastSeen": 4.358,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          4.358
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "div.screen > p:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 432.99,
+          "top": 2005.17,
+          "right": 631.88,
+          "bottom": 2087.88,
+          "width": 198.89,
+          "height": 82.71
+        },
+        "containerSelector": "#root",
+        "text": "GovGuide PH",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 167.88
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 432.99,
+          "y": 2005.17,
+          "width": 198.89,
+          "height": 82.71
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b1",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 747.13,
+          "top": 2177.75,
+          "right": 999.71,
+          "bottom": 2270.89,
+          "width": 252.58,
+          "height": 93.14
+        },
+        "containerSelector": "#root",
+        "text": "Ano ang kailangan?",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 350.89
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 747.13,
+          "y": 2177.75,
+          "width": 252.58,
+          "height": 93.14
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b2",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 94.85,
+          "top": 2107.09,
+          "right": 306.04,
+          "bottom": 2189.92,
+          "width": 211.19,
+          "height": 82.83
+        },
+        "containerSelector": "#root",
+        "text": "What do I need?",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 269.92
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 94.85,
+          "y": 2107.09,
+          "width": 211.19,
+          "height": 82.83
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b3",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 696.36,
+          "top": 2350.93,
+          "right": 882.86,
+          "bottom": 2458.06,
+          "width": 186.5,
+          "height": 107.13
+        },
+        "containerSelector": "#root",
+        "text": "Help sa requirements?",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 538.06
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 696.36,
+          "y": 2350.93,
+          "width": 186.5,
+          "height": 107.13
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "div.screen > div:nth-of-type(5)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 342.38,
+          "top": 2381.18,
+          "right": 556.73,
+          "bottom": 2455.91,
+          "width": 214.35,
+          "height": 74.73
+        },
+        "containerSelector": "#root",
+        "text": "Illustrated conversation",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 535.91
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 342.38,
+          "y": 2381.18,
+          "width": 214.35,
+          "height": 74.73
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-phone",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 264.31,
+          "top": 1845.94,
+          "right": 815.69,
+          "bottom": 2634.06,
+          "width": 551.39,
+          "height": 788.11
+        },
+        "containerSelector": "#language > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 714.06
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 264.31,
+          "y": 1845.94,
+          "width": 551.39,
+          "height": 788.11
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b1",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 722.03,
+          "top": 2153.8,
+          "right": 1034.85,
+          "bottom": 2298.22,
+          "width": 312.82,
+          "height": 144.42
+        },
+        "containerSelector": "div.screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 281.64,
+          "top": 1863.28,
+          "right": 798.36,
+          "bottom": 2616.72,
+          "width": 516.72,
+          "height": 753.44
+        },
+        "overflow": {
+          "right": 236.49
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 722.03,
+          "y": 2153.8,
+          "width": 312.82,
+          "height": 144.42
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b2",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 69.75,
+          "top": 2083.14,
+          "right": 382.57,
+          "bottom": 2227.56,
+          "width": 312.82,
+          "height": 144.42
+        },
+        "containerSelector": "div.screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 281.64,
+          "top": 1863.28,
+          "right": 798.36,
+          "bottom": 2616.72,
+          "width": 516.72,
+          "height": 753.44
+        },
+        "overflow": {
+          "left": 211.89
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 69.75,
+          "y": 2083.14,
+          "width": 312.82,
+          "height": 144.42
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-b3",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 671.25,
+          "top": 2326.98,
+          "right": 991.67,
+          "bottom": 2501.86,
+          "width": 320.42,
+          "height": 174.88
+        },
+        "containerSelector": "div.screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 281.64,
+          "top": 1863.28,
+          "right": 798.36,
+          "bottom": 2616.72,
+          "width": 516.72,
+          "height": 753.44
+        },
+        "overflow": {
+          "right": 193.31
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 671.25,
+          "y": 2326.98,
+          "width": 320.42,
+          "height": 174.88
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "escaped_container",
+        "severity": "info",
+        "time": 5,
+        "selector": "#l-phone",
+        "message": "Positioned element renders far outside its offset parent — its coordinates were likely computed in a different frame (canvas/viewport pixels).",
+        "rect": {
+          "left": 264.31,
+          "top": 1845.94,
+          "right": 815.69,
+          "bottom": 2634.06,
+          "width": 551.39,
+          "height": 788.11
+        },
+        "containerSelector": "#language > div:nth-of-type(1)",
+        "text": "GovGuide PH Ano ang kailangan? What do I need? Help sa requirements? Illustrated conversation",
+        "fixHint": "Compute left/top in the offset parent's frame (subtract its rect), or mark intentional placement with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 264.31,
+          "y": 1845.94,
+          "width": 551.39,
+          "height": 788.11
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 5,
+        "selector": "div.screen",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 281.64,
+          "top": 1863.28,
+          "right": 798.36,
+          "bottom": 2616.72,
+          "width": 516.72,
+          "height": 753.44
+        },
+        "containerSelector": "#root",
+        "text": "GovGuide PH Ano ang kailangan? What do I need? H",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "bottom": 696.72
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/language.html",
+        "bbox": {
+          "x": 281.64,
+          "y": 1863.28,
+          "width": 516.72,
+          "height": 753.44
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "escaped_container",
+        "severity": "info",
+        "time": 11.667,
+        "selector": "#c-lens > div:nth-of-type(1)",
+        "message": "Positioned element renders far outside its offset parent — its coordinates were likely computed in a different frame (canvas/viewport pixels).",
+        "rect": {
+          "left": 665.83,
+          "top": 1268.01,
+          "right": 775.85,
+          "bottom": 1386.77,
+          "width": 110.03,
+          "height": 118.76
+        },
+        "containerSelector": "#c-lens",
+        "text": "",
+        "fixHint": "Compute left/top in the offset parent's frame (subtract its rect), or mark intentional placement with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 465.46,
+          "top": 1098.34,
+          "right": 707.18,
+          "bottom": 1340.06,
+          "width": 241.72,
+          "height": 241.72
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/charter.html",
+        "bbox": {
+          "x": 665.83,
+          "y": 1268.01,
+          "width": 110.03,
+          "height": 118.76
+        },
+        "firstSeen": 11.667,
+        "lastSeen": 11.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          11.667
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 15,
+        "selector": "#a-sheet > div:nth-of-type(1)",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": -33.96,
+          "top": 559.43,
+          "right": 954.2,
+          "bottom": 692.13,
+          "width": 988.16,
+          "height": 132.7
+        },
+        "containerSelector": "#answer > div:nth-of-type(1)",
+        "text": "CHARTER-GROUNDED ANSWER",
+        "fixHint": "Text is 988px x 133px inside 1080px x 1920px and overflows by up to 34px; widen the container to at least ~1114px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 33.96
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/answer.html",
+        "bbox": {
+          "x": -33.96,
+          "y": 559.43,
+          "width": 988.16,
+          "height": 132.7
+        },
+        "firstSeen": 15,
+        "lastSeen": 15,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          15
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 15,
+        "selector": "#a-sheet > div:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": -33.96,
+          "top": 522.27,
+          "right": 954.2,
+          "bottom": 729.29,
+          "width": 988.16,
+          "height": 207.02
+        },
+        "containerSelector": "#root",
+        "text": "CHARTER-GROUNDED ANSWER",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 33.96
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/answer.html",
+        "bbox": {
+          "x": -33.96,
+          "y": 522.27,
+          "width": 988.16,
+          "height": 207.02
+        },
+        "firstSeen": 15,
+        "lastSeen": 15,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          15
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 15,
+        "selector": "#a-sheet",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -363.29,
+          "top": 388.1,
+          "right": 1443.29,
+          "bottom": 2301.9,
+          "width": 1806.57,
+          "height": 1913.81
+        },
+        "containerSelector": "#answer > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 363.29,
+          "right": 363.29,
+          "bottom": 381.9
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/answer.html",
+        "bbox": {
+          "x": -363.29,
+          "y": 388.1,
+          "width": 1806.57,
+          "height": 1913.81
+        },
+        "firstSeen": 15,
+        "lastSeen": 15,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          15
+        ]
+      }
+    ],
+    "duration": 30,
+    "samples": [
+      1.667,
+      5,
+      8.333,
+      11.667,
+      15,
+      18.333,
+      21.667,
+      25,
+      28.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 18,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.667,
+      8.333,
+      15,
+      21.667,
+      28.333
+    ],
+    "checked": 21,
+    "passed": 21
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 240
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "5d255950-1442-4b1a-bffc-5e952ec07f8f",
+    "revision": "e5b89500-2486-4269-b9f2-abf44c6f6181",
+    "report": "D:\\v2\\videos\\govguide-trust\\.hyperframes\\artifacts\\checks\\5d255950-1442-4b1a-bffc-5e952ec07f8f.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.8.210",
+    "latestVersion": "0.9.8",
+    "updateAvailable": true
+  }
+}

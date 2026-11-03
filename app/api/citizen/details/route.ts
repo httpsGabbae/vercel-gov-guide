@@ -1,3 +1,4 @@
+import { requireDetailsUnlock, pinError } from '@/lib/auth/details-pin';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import {
@@ -27,7 +28,8 @@ let latestActiveInspections: InspectionReport[] = [];
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-citizen-id, x-extension-id',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-citizen-id, x-extension-id, x-details-unlock',
+  'Cache-Control': 'no-store',
 };
 
 export async function OPTIONS() {
@@ -47,13 +49,29 @@ interface CitizenDetailsPayload {
 
 export async function GET(req: NextRequest) {
   try {
+    const isExtension = Boolean(req.headers.get('x-extension-id'));
     const { searchParams } = new URL(req.url);
     const queryId = searchParams.get('citizenId');
     const isExplicitActiveQuery = !queryId || queryId === 'active' || queryId === 'latest';
-    const citizenId = isExplicitActiveQuery ? latestActiveCitizenId : (queryId || DEFAULT_CITIZEN_ID);
+    let citizenId: string;
+
+    if (isExtension) {
+      citizenId = isExplicitActiveQuery ? latestActiveCitizenId : (queryId || DEFAULT_CITIZEN_ID);
+    } else {
+      const access = await requireDetailsUnlock(req);
+      if ('response' in access) return access.response;
+      citizenId = access.userId;
+      if (!isExplicitActiveQuery && queryId !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
+    }
 
     // Instant return if querying active session and in-memory cache has applicant data
-    if (isExplicitActiveQuery && latestActiveApplicant && latestActiveApplicant.id === citizenId) {
+    const hasMeaningfulActiveData =
+      Boolean(latestActiveApplicant?.display_name?.trim()) ||
+      Boolean(latestActiveApplicant?.first_name?.trim()) ||
+      Boolean(latestActiveApplicant?.last_name?.trim()) ||
+      Boolean(latestActiveApplicant?.email?.trim());
+
+    if (isExplicitActiveQuery && latestActiveApplicant && hasMeaningfulActiveData && (isExtension || latestActiveApplicant.id === citizenId)) {
       return NextResponse.json(
         {
           ok: true,
@@ -314,9 +332,30 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const isExtension = Boolean(req.headers.get('x-extension-id'));
+    let effectiveUserId: string;
+
+    if (!isExtension) {
+      const access = await requireDetailsUnlock(req);
+      if ('response' in access) return access.response;
+      effectiveUserId = access.userId;
+    } else {
+      effectiveUserId = latestActiveCitizenId || DEFAULT_CITIZEN_ID;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    if (isExtension && body.citizenId) {
+      effectiveUserId = body.citizenId;
+    }
+
+    if (!isExtension) {
+      if (body.citizenId !== effectiveUserId || (body.applicant?.id && body.applicant.id !== effectiveUserId)) {
+        return pinError('Access denied.', 403, 'FORBIDDEN');
+      }
+    }
+
     const {
-      citizenId = DEFAULT_CITIZEN_ID,
+      citizenId = effectiveUserId,
       applicant,
       savedFiles,
       checklistItems,
@@ -328,6 +367,10 @@ export async function POST(req: NextRequest) {
         { ok: false, message: 'Invalid payload: applicant profile is required' },
         { status: 400, headers: corsHeaders },
       );
+    }
+
+    if (!isExtension) {
+      applicant.id = effectiveUserId;
     }
 
     // Always update the active session memory cache immediately
@@ -389,8 +432,18 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const isExtension = Boolean(req.headers.get('x-extension-id'));
     const { searchParams } = new URL(req.url);
-    const citizenId = searchParams.get('citizenId') || DEFAULT_CITIZEN_ID;
+    let citizenId: string;
+
+    if (isExtension) {
+      citizenId = searchParams.get('citizenId') || latestActiveCitizenId || DEFAULT_CITIZEN_ID;
+    } else {
+      const access = await requireDetailsUnlock(req);
+      if ('response' in access) return access.response;
+      citizenId = access.userId;
+      if (searchParams.has('citizenId') && searchParams.get('citizenId') !== citizenId) return pinError('Access denied.', 403, 'FORBIDDEN');
+    }
 
     const isMarried = citizenId === PROFILES.married_applicant.id;
     const isJobseeker = citizenId === PROFILES.jobseeker.id;

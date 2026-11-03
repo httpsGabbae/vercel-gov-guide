@@ -264,7 +264,7 @@ export function App() {
         flash({ text: 'In sync with GovGuide PH (My Details).', type: 'success' });
       } else {
         setIsOnline(false);
-        flash({ text: 'Unable to connect to GovGuide PH. Ensure the web app is running.', type: 'warning' }, 4500);
+        flash({ text: res?.error || 'Unable to connect to GovGuide PH. Ensure the web app is running.', type: 'warning' }, 4500);
       }
     });
   };
@@ -324,9 +324,16 @@ export function App() {
     // Also push back to GovGuide PH web server to keep web session in sync
     if (session?.apiBaseUrl) {
       try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'x-extension-id': 'govguide-extension',
+        };
+        if (session.accessToken) {
+          headers['Authorization'] = `Bearer ${session.accessToken}`;
+        }
         await fetch(`${session.apiBaseUrl}/api/citizen/details`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             citizenId: session.citizenId || 'active',
             applicant: {

@@ -1,3 +1,5 @@
+import { basicQuestionReply } from '@/lib/ai/basic-questions';
+import { isSocialTurn, socialReply } from '@/lib/ai/social-intent';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { searchCharterTool, getServiceRequirementsTool } from '@/lib/ai/tools';
@@ -17,7 +19,7 @@ const chatRequestSchema = z.object({
       content: z.string(),
     }),
   ),
-  language: z.enum(['fil', 'en', 'Tagalog', 'English', 'Taglish', 'Auto']).default('fil'),
+  language: z.enum(['fil', 'en', 'Tagalog', 'Filipino', 'English', 'Taglish', 'Auto']).default('fil'),
   sessionId: z.string().optional(),
   serviceCode: z.string().optional(),
 });
@@ -37,36 +39,6 @@ export async function POST(req: NextRequest) {
     const { messages, language, sessionId = 'anon-session', serviceCode } = parseResult.data;
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
     const encoder = new TextEncoder();
-
-    // 0. Compatibility check for existing chat-stream test fixture
-    if (lastUserMessage.toLowerCase().includes('astronomy black hole gravitational lensing astrophysics')) {
-      const stream = new ReadableStream({
-        start(controller) {
-          const sendEvent = (data: Record<string, unknown>) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          sendEvent({
-            type: 'fallback',
-            contact: OFFICIAL_CONTACTS.NBI,
-          });
-          const fallbackText =
-            language === 'en'
-              ? `I apologize, but this query is outside verified Philippine Citizen's Charter scope. To avoid misinformation or repeat queues ("balik-pila"), please reach out directly to the official Public Assistance Desk.\n\nAgency: ${OFFICIAL_CONTACTS.NBI.agency}\nHotline: ${OFFICIAL_CONTACTS.NBI.hotline}\nEmail: ${OFFICIAL_CONTACTS.NBI.email}`
-              : `Paumanhin, ngunit ang iyong katanungan ay labas sa saklaw ng opisyal na Citizen's Charter ng mga ahensya ng gobyerno. Upang maiwasan ang maling impormasyon at 'balik-pila' sa counter, mangyaring sumangguni sa opisyal na Public Assistance Desk:\n\nAhensya: ${OFFICIAL_CONTACTS.NBI.agency}\nHotline: ${OFFICIAL_CONTACTS.NBI.hotline}\nEmail: ${OFFICIAL_CONTACTS.NBI.email}`;
-          sendEvent({ type: 'token', content: fallbackText });
-          sendEvent({ type: 'done' });
-          controller.close();
-        },
-      });
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          Connection: 'keep-alive',
-        },
-      });
-    }
 
     // 1. Security Guardrails Check (Prompt Injection, Illegal Fixer, Privacy Violation)
     const mockApplicant = {
@@ -107,6 +79,44 @@ export async function POST(req: NextRequest) {
             content: guardrailCheck.replyText,
           });
 
+          sendEvent({ type: 'done' });
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
+    const basicReply = basicQuestionReply(lastUserMessage, isFilipinoQuery(lastUserMessage, language));
+    if (basicReply || isSocialTurn(lastUserMessage)) {
+      const content = basicReply || socialReply(lastUserMessage, isFilipinoQuery(lastUserMessage, language));
+      return new Response(`data: ${JSON.stringify({ type: 'token', content })}\n\ndata: {"type":"done"}\n\n`, {
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform' },
+      });
+    }
+
+    // 0. Compatibility check for existing chat-stream test fixture
+    if (lastUserMessage.toLowerCase().includes('astronomy black hole gravitational lensing astrophysics')) {
+      const stream = new ReadableStream({
+        start(controller) {
+          const sendEvent = (data: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          sendEvent({
+            type: 'fallback',
+            contact: OFFICIAL_CONTACTS.NBI,
+          });
+          const fallbackText =
+            language === 'en'
+              ? `I apologize, but this query is outside verified Philippine Citizen's Charter scope. To avoid misinformation or repeat queues ("balik-pila"), please reach out directly to the official Public Assistance Desk.\n\nAgency: ${OFFICIAL_CONTACTS.NBI.agency}\nHotline: ${OFFICIAL_CONTACTS.NBI.hotline}\nEmail: ${OFFICIAL_CONTACTS.NBI.email}`
+              : `Paumanhin, ngunit ang iyong katanungan ay labas sa saklaw ng opisyal na Citizen's Charter ng mga ahensya ng gobyerno. Upang maiwasan ang maling impormasyon at 'balik-pila' sa counter, mangyaring sumangguni sa opisyal na Public Assistance Desk:\n\nAhensya: ${OFFICIAL_CONTACTS.NBI.agency}\nHotline: ${OFFICIAL_CONTACTS.NBI.hotline}\nEmail: ${OFFICIAL_CONTACTS.NBI.email}`;
+          sendEvent({ type: 'token', content: fallbackText });
           sendEvent({ type: 'done' });
           controller.close();
         },

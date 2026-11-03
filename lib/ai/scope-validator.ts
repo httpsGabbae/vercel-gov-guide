@@ -1,3 +1,5 @@
+import { basicQuestionKind, basicQuestionReply } from '@/lib/ai/basic-questions';
+import { isSocialTurn } from '@/lib/ai/social-intent';
 /**
  * GovGuidePH — Master AI System Scope Validation & Intent Classification Layer
  * Version 1.0 — Adaptive Government Intelligence (§4 Strict Scope Enforcement)
@@ -172,6 +174,14 @@ export function validateMessageScope(
 ): ScopeValidationResult {
   const text = rawMessage.trim();
   const lower = text.toLowerCase();
+
+  const basicKind = basicQuestionKind(text);
+  if (basicKind) return {
+    intent: basicKind === 'service' ? 'NEEDS_CLARIFICATION' : 'GOVERNMENT_INFORMATION',
+    confidence: 0.95, reason: 'Recognized basic profile, help, or service clarification question.',
+    isCoherent: true, isContextualFollowup: false,
+    clarificationQuestion: basicKind === 'service' ? basicQuestionReply(text, /\b(ano|anong|magkano|saan|paano|gaano|may|libre)\b/i.test(text))! : undefined,
+  };
 
   // 1. Check for pure gibberish / key mash
   if (isRandomGibberish(text)) {
@@ -448,11 +458,7 @@ export function validateMessageScope(
   }
 
   // Check if message is a greeting or inquiry about assistant identity / capabilities
-  const isAssistantIdentityOrGreeting =
-    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|kaagapai|there|friend)|\s*[!?.])*$/i.test(text) ||
-    (text.split(/\s+/).length <= 4 && /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text)) ||
-    /^(who|what|sino|ano)\s+(are|is|r)\s+(you|u|this|govguide|kaagap)/i.test(text) ||
-    /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+ka\s+ba|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|how\s+can\s+you\s+help|what\s+services\s+do\s+you|ano\s+ang\s+magagawa\s+mo|paano\s+ka\s+makakatulong|magpakilala\s+ka|help\s+me|can\s+you\s+help|pwede\s+magtanong)\b/i.test(text);
+  const isAssistantIdentityOrGreeting = isSocialTurn(text);
 
   if (isAssistantIdentityOrGreeting) {
     return {

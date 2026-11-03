@@ -282,23 +282,56 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
 /**
  * Syncs the Citizen's Details with the GovGuide PH Web App API
  */
-export async function syncVaultFromGovGuide(apiUrl: string, citizenId?: string): Promise<CitizenVaultData> {
+export async function syncVaultFromGovGuide(
+  apiUrl: string,
+  citizenId?: string,
+  accessToken?: string
+): Promise<CitizenVaultData> {
   const targetId = citizenId && citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0' ? citizenId : 'active';
-  const res = await fetch(`${apiUrl}/api/citizen/details?citizenId=${encodeURIComponent(targetId)}`);
-  if (!res.ok) {
-    throw new Error(`GovGuide Sync error: ${res.statusText}`);
+  const headers: Record<string, string> = {
+    'x-extension-id': 'govguide-extension',
+  };
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
   }
-  const json = await res.json();
-  if (json.ok && json.applicant) {
-    const currentVault = await loadLocalVault();
-    const syncedVault = applicantToVault(json.applicant, currentVault);
 
-    await saveLocalVault(syncedVault);
-    await saveSession({
-      lastSyncedAt: new Date().toISOString(),
-      citizenId: json.applicant.id || targetId,
-    });
-    return syncedVault;
+  // Candidate port fallback: if the configured port is unreachable, probe candidate dev ports
+  const candidateUrls = [apiUrl];
+  const commonPorts = ['3000', '3001', '3002', '3003', '3010', '3011', '3100'];
+  for (const p of commonPorts) {
+    const candidate = `http://localhost:${p}`;
+    if (!candidateUrls.includes(candidate)) {
+      candidateUrls.push(candidate);
+    }
   }
-  throw new Error('No applicant profile returned from GovGuide');
+
+  let lastError: Error | null = null;
+  for (const base of candidateUrls) {
+    try {
+      const res = await fetch(`${base}/api/citizen/details?citizenId=${encodeURIComponent(targetId)}`, {
+        headers,
+      });
+      if (!res.ok) {
+        lastError = new Error(`GovGuide Sync error: ${res.statusText}`);
+        continue;
+      }
+      const json = await res.json();
+      if (json.ok && json.applicant) {
+        const currentVault = await loadLocalVault();
+        const syncedVault = applicantToVault(json.applicant, currentVault);
+
+        await saveLocalVault(syncedVault);
+        await saveSession({
+          lastSyncedAt: new Date().toISOString(),
+          citizenId: json.applicant.id || targetId,
+          apiBaseUrl: base,
+        });
+        return syncedVault;
+      }
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError || new Error('No applicant profile returned from GovGuide');
 }

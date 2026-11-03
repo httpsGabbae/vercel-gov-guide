@@ -4,7 +4,7 @@
  * Notifications & Agency API Dispatch
  */
 
-import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault, EMPTY_VAULT_DATA } from '../lib/vault';
+import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault, EMPTY_VAULT_DATA, DEFAULT_VAULT_DATA } from '../lib/vault';
 import { clearStoredCitizenChat } from '../lib/citizen-chat';
 import type { ExtensionMessage, ExtensionSession, UserRole } from '../types';
 
@@ -233,13 +233,22 @@ async function authedFetch(path: string, init: RequestInit = {}): Promise<Respon
 
 let webSyncInFlight: string | null = null;
 
-async function syncWebAuth(payload: { accessToken?: string; refreshToken?: string; signedOut?: boolean }) {
+async function syncWebAuth(payload: { accessToken?: string; refreshToken?: string; signedOut?: boolean; apiBaseUrl?: string }) {
   const session = await getSession();
+  const effectiveBaseUrl = payload.apiBaseUrl || session.apiBaseUrl;
 
-  if (payload.signedOut || !payload.accessToken) {
+  if (payload.signedOut) {
     // Web chat signed out: mirror sign-out for any session sourced from the web
     if (session.isAuthenticated && session.authSource === 'web') {
       return { session: publicSession(await clearAuth()) };
+    }
+    return { session: publicSession(session) };
+  }
+
+  if (!payload.accessToken) {
+    if (payload.apiBaseUrl && payload.apiBaseUrl !== session.apiBaseUrl) {
+      const updated = await saveSession({ apiBaseUrl: payload.apiBaseUrl });
+      return { session: publicSession(updated) };
     }
     return { session: publicSession(session) };
   }
@@ -253,12 +262,15 @@ async function syncWebAuth(payload: { accessToken?: string; refreshToken?: strin
 
   webSyncInFlight = payload.accessToken;
   try {
-    const res = await fetch(`${session.apiBaseUrl}/api/extension/auth`, {
-      headers: { Authorization: `Bearer ${payload.accessToken}` },
+    const res = await fetch(`${effectiveBaseUrl}/api/extension/auth`, {
+      headers: { Authorization: `Bearer ${payload.accessToken}`, 'x-extension-id': 'govguide-extension' },
     });
     const json = await res.json();
     if (!res.ok || !json.success) {
       return { session: publicSession(session), error: json.error || 'Web session could not be verified' };
+    }
+    if (payload.apiBaseUrl && payload.apiBaseUrl !== session.apiBaseUrl) {
+      await saveSession({ apiBaseUrl: payload.apiBaseUrl });
     }
     const updated = await applyAuth(
       json.user,
@@ -287,7 +299,7 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
         if (session.isOnlineSyncEnabled) {
           try {
             const targetId = session.citizenId && session.citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0' ? session.citizenId : 'active';
-            const liveVault = await syncVaultFromGovGuide(session.apiBaseUrl, targetId);
+            const liveVault = await syncVaultFromGovGuide(session.apiBaseUrl, targetId, session.accessToken);
             return { vault: liveVault };
           } catch {
             // Server offline or unreachable, fall through to local vault
@@ -297,6 +309,9 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
         // Safe ignore
       }
       const vault = await loadLocalVault();
+      if (!vault.firstName && !vault.lastName && !vault.philsysId) {
+        return { vault: DEFAULT_VAULT_DATA };
+      }
       return { vault };
     }
     case 'SAVE_VAULT': {
@@ -380,17 +395,37 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
     }
     case 'LOGIN': {
       const session = await getSession();
-      const res = await fetch(`${session.apiBaseUrl}/api/extension/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: msg.payload.email, password: msg.payload.password }),
-      });
+      const candidateUrls = [session.apiBaseUrl, 'http://localhost:3000', 'http://localhost:3002', 'http://localhost:3001', 'http://localhost:3011'];
+      let res: Response | null = null;
+      let effectiveBase = session.apiBaseUrl;
+
+      for (const url of candidateUrls) {
+        try {
+          res = await fetch(`${url}/api/extension/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-extension-id': 'govguide-extension' },
+            body: JSON.stringify({ email: msg.payload.email, password: msg.payload.password }),
+          });
+          if (res.ok) {
+            effectiveBase = url;
+            break;
+          }
+        } catch {}
+      }
+
+      if (!res) {
+        return { success: false, error: 'Unable to connect to GovGuide PH. Ensure the web app is running.' };
+      }
+
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
         return { success: false, error: json.error || 'Invalid email or password.' };
       }
       if (session.userId && session.userId !== json.user.userId) {
         await saveLocalVault(EMPTY_VAULT_DATA);
+      }
+      if (effectiveBase !== session.apiBaseUrl) {
+        await saveSession({ apiBaseUrl: effectiveBase });
       }
       const updated = await applyAuth(json.user, json.tokens, 'extension');
       return { success: true, session: publicSession(updated) };
@@ -403,13 +438,32 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
       return await syncWebAuth(msg.payload);
     }
     case 'SYNC_FROM_GOVGUIDE': {
-      const session = await getSession();
-      const targetId = msg.payload?.citizenId || (session.citizenId && session.citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0' ? session.citizenId : 'active');
-      const synced = await syncVaultFromGovGuide(session.apiBaseUrl, targetId);
       try {
-        chrome.runtime.sendMessage({ type: 'VAULT_UPDATED', vault: synced });
-      } catch {}
-      return { success: true, vault: synced };
+        const session = await getSession();
+        // Check open tabs for active GovGuide origin
+        try {
+          const tabs = await chrome.tabs.query({ url: ['http://localhost:*/*', 'http://127.0.0.1:*/*', '*://*.govguide.ph/*'] });
+          for (const tab of tabs) {
+            if (tab.url && (tab.title?.includes('GovGuide') || tab.url.includes('/chat') || tab.url.includes('/login') || tab.url.includes('/agency'))) {
+              const u = new URL(tab.url);
+              if (u.origin && u.origin !== session.apiBaseUrl) {
+                session.apiBaseUrl = u.origin;
+                await saveSession({ apiBaseUrl: u.origin });
+              }
+              break;
+            }
+          }
+        } catch {}
+
+        const targetId = msg.payload?.citizenId || (session.citizenId && session.citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0' ? session.citizenId : 'active');
+        const synced = await syncVaultFromGovGuide(session.apiBaseUrl, targetId, session.accessToken);
+        try {
+          chrome.runtime.sendMessage({ type: 'VAULT_UPDATED', vault: synced });
+        } catch {}
+        return { success: true, vault: synced };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Unable to connect to GovGuide PH. Ensure the web app is running.' };
+      }
     }
     case 'FETCH_AGENCY_REQUESTS': {
       try {

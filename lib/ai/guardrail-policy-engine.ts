@@ -332,7 +332,7 @@ export function evaluateGuardrailPolicy(
 
   // CONTROL 5: GRD-RAG-005 (Retrieval Gate: Strict 0.65 Minimum Similarity Threshold)
   if (typeof ctx.retrievalScore === 'number') {
-    if (ctx.retrievalScore < 0.65) {
+    if (!Number.isFinite(ctx.retrievalScore) || ctx.retrievalScore < 0.65) {
       const contact = OFFICIAL_CONTACTS.ARTA;
       return {
         requestId,
@@ -352,7 +352,8 @@ export function evaluateGuardrailPolicy(
 
   // CONTROL 6: GRD-ACT-006 (Consequential Action Confirmation Envelope)
   if (ctx.actionPreview) {
-    const isExpired = new Date(ctx.actionPreview.expiresAt).getTime() < Date.now();
+    const expiry = new Date(ctx.actionPreview.expiresAt).getTime();
+    const isExpired = !Number.isFinite(expiry) || expiry <= Date.now();
     if (isExpired) {
       return {
         requestId,
@@ -394,7 +395,7 @@ export function evaluateGuardrailPolicy(
       outcome: 'allow',
       reasonCodes: ['GRD-DOC-008'],
       message:
-        'Pagsusuring Paunang Gabay (Advisory Inspection): Walang isyung nakita sa mga nasuring field. Ang opisyal na ahensya pa rin ang magpapasya sa orihinal na dokumento sa counter.',
+        'Pagsusuring Paunang Gabay (Advisory Inspection): Hindi pa ito resulta ng pagsusuri o pagpapatunay ng dokumento. Ang opisyal na ahensya pa rin ang magpapasya sa orihinal na dokumento sa counter.',
       evidenceStatus: 'supported',
       citations: [],
       actionPreviewId: null,

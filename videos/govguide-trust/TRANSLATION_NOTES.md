@@ -1,0 +1,1 @@
+All scenes are new native HTML/SVG, editable in HyperFrames. No imported Remotion source or footage; source comparison not applicable.

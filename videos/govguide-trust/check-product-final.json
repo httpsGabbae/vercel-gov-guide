@@ -1,0 +1,375 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 14
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 6,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 1.667,
+        "selector": "#o-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 76,
+          "top": 51,
+          "right": 1006,
+          "bottom": 1704,
+          "width": 930,
+          "height": 1653
+        },
+        "containerSelector": "#demo-open > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "top": 389,
+          "bottom": 44
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-open.html",
+        "bbox": {
+          "x": 76,
+          "y": 51,
+          "width": 930,
+          "height": 1653
+        },
+        "firstSeen": 1.667,
+        "lastSeen": 1.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          1.667
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 5,
+        "selector": "#ask-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 31,
+          "top": -259,
+          "right": 1072.6,
+          "bottom": 1592.36,
+          "width": 1041.6,
+          "height": 1851.36
+        },
+        "containerSelector": "#demo-ask > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "left": 44,
+          "right": 67.6,
+          "top": 699
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-ask.html",
+        "bbox": {
+          "x": 31,
+          "y": -259,
+          "width": 1041.6,
+          "height": 1851.36
+        },
+        "firstSeen": 5,
+        "lastSeen": 5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 8.333,
+        "selector": "#s-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 76,
+          "top": 460.2,
+          "right": 1006,
+          "bottom": 2113.2,
+          "width": 930,
+          "height": 1653
+        },
+        "containerSelector": "#demo-source > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "bottom": 453.2
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-source.html",
+        "bbox": {
+          "x": 76,
+          "y": 460.2,
+          "width": 930,
+          "height": 1653
+        },
+        "firstSeen": 8.333,
+        "lastSeen": 11.667,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          8.333,
+          11.667
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 15,
+        "selector": "#r-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 76,
+          "top": -29,
+          "right": 1006,
+          "bottom": 1624,
+          "width": 930,
+          "height": 1653
+        },
+        "containerSelector": "#demo-ready > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "top": 469
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-ready.html",
+        "bbox": {
+          "x": 76,
+          "y": -29,
+          "width": 930,
+          "height": 1653
+        },
+        "firstSeen": 15,
+        "lastSeen": 15,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          15
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 18.333,
+        "selector": "#i-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 76,
+          "top": -7.32,
+          "right": 1006,
+          "bottom": 1645.68,
+          "width": 930,
+          "height": 1653
+        },
+        "containerSelector": "#demo-inspect > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "top": 447.32
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-inspect.html",
+        "bbox": {
+          "x": 76,
+          "y": -7.32,
+          "width": 930,
+          "height": 1653
+        },
+        "firstSeen": 18.333,
+        "lastSeen": 21.667,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          18.333,
+          21.667
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 25,
+        "selector": "#g-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 36,
+          "top": 271,
+          "right": 1059,
+          "bottom": 2089.3,
+          "width": 1023,
+          "height": 1818.3
+        },
+        "containerSelector": "#demo-agency > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 75,
+          "top": 440,
+          "right": 1005,
+          "bottom": 1660,
+          "width": 930,
+          "height": 1220
+        },
+        "overflow": {
+          "left": 39,
+          "right": 54,
+          "top": 169,
+          "bottom": 429.3
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/demo-agency.html",
+        "bbox": {
+          "x": 36,
+          "y": 271,
+          "width": 1023,
+          "height": 1818.3
+        },
+        "firstSeen": 25,
+        "lastSeen": 25,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          25
+        ]
+      }
+    ],
+    "duration": 30,
+    "samples": [
+      1.667,
+      5,
+      8.333,
+      11.667,
+      15,
+      18.333,
+      21.667,
+      25,
+      28.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 6,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.667,
+      8.333,
+      15,
+      21.667,
+      28.333
+    ],
+    "checked": 13,
+    "passed": 13
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 240
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "b9ee0951-63eb-47fc-b383-5ce078a955c5",
+    "revision": "462a4edf-c051-4ac5-8d9d-fc0687bb4bc5",
+    "report": "D:\\v2\\videos\\govguide-trust\\.hyperframes\\artifacts\\checks\\b9ee0951-63eb-47fc-b383-5ce078a955c5.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.8.210",
+    "latestVersion": "0.9.8",
+    "updateAvailable": true
+  }
+}
