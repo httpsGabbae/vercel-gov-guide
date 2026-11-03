@@ -43,7 +43,7 @@ export function AgentResponseView({
           type="button"
           onClick={handleCopy}
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-200/80 bg-slate-50/80 hover:bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:text-slate-800 transition-colors shadow-2xs"
-          title="Kopyahin ang tugon"
+          title="Kopyahin"
         >
           {copied ? (
             <>

@@ -26,7 +26,6 @@ import { CHARTER_SOURCES, formatFullName, parseNameParts, parseAddressParts } fr
 import { redactSecrets, type GuardrailCardData } from '@/lib/ai/guardrails';
 import { SERVICES_REGISTRY } from '@/lib/services/registry';
 import { AgentResponseView } from '@/components/chat/AgentResponseView';
-import { ChatLoadingAnimation } from '@/components/chat/ChatLoadingAnimation';
 import { ExpenseReceiptCard } from '@/components/chat/ExpenseReceiptCard';
 import { OnlineApplicationCard } from '@/components/chat/OnlineApplicationCard';
 import {
@@ -944,119 +943,6 @@ interface StepItem {
   id: string;
   label: string;
   status: 'running' | 'done' | 'pending';
-}
-
-function StepsProgress({ steps, done }: { steps: StepItem[]; done: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const open = !done || expanded;
-  const count = steps.length;
-  const runningStep = steps.find((s) => s.status === 'running');
-  const statusLabel = runningStep
-    ? `Working on it - ${runningStep.label.charAt(0).toLowerCase()}${runningStep.label.slice(1)}...`
-    : 'Working on it...';
-
-  return (
-    <div className="w-full max-w-[560px]">
-      <button
-        type="button"
-        disabled={!done}
-        onClick={() => setExpanded((e) => !e)}
-        aria-expanded={open}
-        className="row-btn press -ml-1.5 flex min-h-9 items-center gap-3 rounded-[10px] px-1.5 text-left disabled:cursor-default"
-      >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--brand)]">
-          <Swap
-            active={done ? 1 : 0}
-            items={[
-              <Spinner key="s" variant="main" size={24} />,
-              <span
-                key="c"
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 [&_svg]:size-3.5"
-              >
-                {Icons.check}
-              </span>,
-            ]}
-          />
-        </span>
-        <Swap
-          active={done ? 1 : 0}
-          className="justify-items-start text-[14px] text-[var(--label-2)]"
-          items={[
-            <span key="w" className="shimmer">
-              {statusLabel}
-            </span>,
-            <span key="d" className="font-medium text-slate-700">
-              Completed {count} step{count === 1 ? '' : 's'}
-            </span>,
-          ]}
-        />
-        <span
-          className={`chev text-[var(--label-3)] ${done ? 'opacity-100' : 'opacity-0'}`}
-          data-open={expanded}
-          aria-hidden="true"
-        >
-          {Icons.chevronRight}
-        </span>
-      </button>
-
-      <div className="disclosure" data-open={open}>
-        <div>
-          <ol className="ml-[7px] pt-2 pb-1">
-            {steps.map((step, idx) => {
-              const isDone = step.status === 'done';
-              const isRunning = step.status === 'running';
-              const isLast = idx === count - 1;
-              return (
-                <li key={step.id} className="enter relative flex items-center gap-3 pb-3.5 last:pb-1">
-                  {!isLast && (
-                    <span
-                      aria-hidden="true"
-                      className={`absolute top-9 bottom-0 left-[15px] border-l-2 transition-colors duration-300 ${isDone ? 'border-emerald-500' : 'border-dotted border-[var(--hairline)]'
-                        }`}
-                    />
-                  )}
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums shadow-xs transition-all duration-200 ${isDone
-                      ? 'bg-emerald-600 text-white shadow-emerald-200'
-                      : isRunning
-                        ? 'border-2 border-[var(--brand)] bg-blue-50 text-[var(--brand)] animate-pulse'
-                        : 'border border-[var(--hairline)] bg-slate-50 text-[var(--label-3)]'
-                      }`}
-                  >
-                    {isDone ? (
-                      <span className="text-[11px] font-bold">✓</span>
-                    ) : (
-                      idx + 1
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`block truncate text-[13.5px] font-medium ${isDone ? 'text-slate-800' : isRunning ? 'text-blue-900 font-semibold' : 'text-slate-500'
-                        }`}
-                    >
-                      {step.label}
-                    </span>
-                    <span className="block text-[12px] text-[var(--label-3)]">
-                      {isDone ? 'Done' : isRunning ? 'Working...' : 'Queued'}
-                    </span>
-                  </span>
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--label-3)] [&_svg]:size-4">
-                    {isDone ? (
-                      <span className="text-emerald-600 font-bold">✓</span>
-                    ) : isRunning ? (
-                      <Spinner size={16} />
-                    ) : (
-                      <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3547,45 +3433,10 @@ export default function CitizenChatPage() {
       const isDfa = /\b(dfa|passport|epassport|consular|aseana)\b/i.test(lower);
       const isDpwh = /\b(dpwh|infrastructure|kalsada|tulay|highway|contract)\b/i.test(lower);
 
-      const plannedStepLabels: string[] = isInspection
-        ? [
-          'Checking document privacy and scanning image clarity (RA 10173)',
-          'Auditing identity fields for expired dates, mismatches & missing seals',
-          'Compiling counter-ready inspection scorecard and checklist',
-        ]
-        : isJobseeker
-          ? [
-            'Checking RA 11261 First-Time Jobseekers fee waiver provisions',
-            'Verifying 90-day Barangay Certificate validity & official dry seal',
-            'Compiling official fee waiver checklist and counter guidelines',
-          ]
-          : isPsa
-            ? [
-              'Checking PSAHelpline.ph official doorstep ordering rules & flat rates',
-              'Verifying courier receiving requirements and accepted primary IDs',
-              'Preparing official PSA birth certificate checklist and tracking guide',
-            ]
-            : (isNbi || isPhilhealth)
-              ? [
-                "Retrieving official Citizen's Charter standards and statutory guidelines",
-                'Verifying accepted government IDs and fee payment schedules',
-                'Preparing counter-ready requirements checklist',
-              ]
-              : [
-                "Retrieving official Citizen's Charter provisions and accepted IDs",
-                'Cross-checking requirements against My Details vault',
-                'Preparing interactive checklist and counter-ready guidance',
-              ];
-
       const initialAgentMsg: ChatMessage = {
         id: agentMsgId,
         from: 'agent',
         phase: 'working',
-        steps: plannedStepLabels.map((label, idx) => ({
-          id: `step-${idx}`,
-          label,
-          status: idx === 0 ? 'running' : 'pending',
-        })),
       };
 
       setThreads((prev) => {
@@ -3631,8 +3482,8 @@ export default function CitizenChatPage() {
           })),
         );
 
-        // Start inspection in parallel with step animations
-        const inspectPromise = fetch('/api/inspect', {
+        // Call inspection API directly and wait naturally for processing to finish
+        const res = await fetch('/api/inspect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3643,48 +3494,11 @@ export default function CitizenChatPage() {
             language,
             serviceCode: serviceOverride,
           }),
-        }).then(async (res) => {
-          const data = await parseResponseJson(res);
-          if (!data || !data.ok) {
-            throw new Error(data?.message || 'Inspection request failed');
-          }
-          return data;
         });
-
-        // Step through each checkpoint sequentially with 2.0s pacing (last step 1.0s)
-        for (let sIdx = 0; sIdx < plannedStepLabels.length; sIdx++) {
-          setThreads((prev) =>
-            prev.map((t) =>
-              t.id !== threadId
-                ? t
-                : {
-                  ...t,
-                  messages: t.messages.map((m) =>
-                    m.id === agentMsgId
-                      ? {
-                        ...m,
-                        phase: 'working',
-                        steps: plannedStepLabels.map((label, idx) => ({
-                          id: `step-${idx}`,
-                          label,
-                          status:
-                            idx < sIdx
-                              ? 'done'
-                              : idx === sIdx
-                                ? 'running'
-                                : 'pending',
-                        })),
-                      }
-                      : m,
-                  ),
-                },
-            ),
-          );
-          const stepDelay = sIdx === plannedStepLabels.length - 1 ? 1000 : 2000;
-          await new Promise((r) => setTimeout(r, stepDelay));
+        const data = await parseResponseJson(res);
+        if (!data || !data.ok) {
+          throw new Error(data?.message || 'Inspection request failed');
         }
-
-        const data = await inspectPromise;
 
         // Learn personal details from chat and update My Details profile in real-time
         if (data.learnedDetails && Object.keys(data.learnedDetails).length > 0) {
@@ -3740,35 +3554,6 @@ export default function CitizenChatPage() {
         ) {
           setIsDpwhModalOpen(true);
         }
-
-        const doneSteps: StepItem[] = (data.steps?.length ? data.steps : plannedStepLabels).map(
-          (label: string, idx: number) => ({
-            id: `step-${idx}`,
-            label,
-            status: 'done',
-          }),
-        );
-
-        // Flash all steps as verified done
-        setThreads((prev) =>
-          prev.map((t) =>
-            t.id !== threadId
-              ? t
-              : {
-                ...t,
-                messages: t.messages.map((m) =>
-                  m.id === agentMsgId
-                    ? {
-                      ...m,
-                      steps: doneSteps,
-                    }
-                    : m,
-                ),
-              },
-          ),
-        );
-
-        await new Promise((r) => setTimeout(r, 220));
 
         // Append Gastusin Receipt Card at the end if cost/fee inquiry was asked
         let finalCards: ChatCardPayload[] = data.cards ? [...data.cards] : [];
@@ -3968,7 +3753,6 @@ export default function CitizenChatPage() {
                     ? {
                       ...m,
                       phase: 'done' as const,
-                      steps: doneSteps,
                       reply: {
                         text: data.text,
                         cards: finalCards,
@@ -5126,27 +4910,17 @@ export default function CitizenChatPage() {
                           <div key={uniqueMsgKey} id={`msg-${msg.id}`} className="enter-card flex gap-3 scroll-mt-4">
                             <LogoMark size={24} className="mt-0.5 shrink-0" />
                             <div className="flex min-w-0 flex-1 flex-col gap-3">
-                              {msg.phase === 'booting' ? (
-                                <div className="enter flex items-center gap-3 py-1">
+                              {msg.phase !== 'done' ? (
+                                <div className="enter flex items-center py-2" role="status" aria-label="Loading">
                                   <Spinner
                                     variant="main"
                                     size={24}
-                                    label="GovGuidePH is inspecting"
+                                    label="GovGuidePH is working"
                                   />
-                                  <span className="text-[14px] text-[var(--label-2)]">
-                                    Getting ready...
-                                  </span>
                                 </div>
                               ) : (
-                                <>
-                                  {msg.steps && msg.steps.length > 0 && (
-                                    <StepsProgress
-                                      steps={msg.steps}
-                                      done={msg.phase !== 'working'}
-                                    />
-                                  )}
-                                  {msg.phase === 'done' && msg.reply && (
-                                    <div className="enter-card flex flex-col gap-3">
+                                msg.reply && (
+                                  <div className="enter-card flex flex-col gap-3">
                                       <AgentResponseView
                                         text={msg.reply.text}
                                         onOpenSource={(id) => setSourceDrawerId(id)}
@@ -5280,9 +5054,8 @@ export default function CitizenChatPage() {
                                         }
                                       />
                                     </div>
-                                  )}
-                                </>
-                              )}
+                                  )
+                                )}
                               {msg.error && (
                                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
                                   {msg.error}
