@@ -29,7 +29,7 @@ export const INITIAL_GREETING_MESSAGE: CitizenChatMessage = {
   id: 'welcome-1',
   role: 'assistant',
   content:
-    'Kamusta! Ako ang iyong GovGuide AI Assistant. Magtanong tungkol sa requirements ng DFA Passport, NBI Clearance, PSA Birth Certificate, PhilHealth, o mga proseso sa counter.',
+    'Kumusta! Ako ang iyong GovGuide AI Assistant. Maaari kitang tulungan sa requirements at paghahanda para sa:\n• PSA Birth Certificate\n• NBI Clearance\n• Barangay Certificate',
   timestamp: new Date().toISOString(),
 };
 
@@ -95,20 +95,13 @@ export function getOfflineCharterAnswer(query: string): { content: string; sourc
   ) {
     return {
       content:
-        'Magandang araw! Ako si **GovGuide PH**, ang iyong AI Citizen Pre-Flight Assistant para sa mga serbisyo ng gobyerno ng Pilipinas.\n\n' +
-        'Ang layunin ko ay tulungan kang maging **Counter-Ready** at maiwasan ang "balik-pila" sa pamamagitan ng pag-verify ng iyong mga dokumento at pagsusuri ng mga opisyal na requirements para sa:\n' +
-        '• **NBI Clearance** (New, Renewal, First-Time Jobseeker RA 11261)\n' +
-        '• **PSA Documents** (Birth Certificate, Marriage, CENOMAR)\n' +
-        '• **PhilHealth** (PMRF, MDR, Dependent Registration)\n' +
-        '• **DFA Passport** (Appointment & Renewal requirements)\n\n' +
-        'Ano pong serbisyo ang maari kong maitulong sa iyo ngayon?',
-      sources: [
-        {
-          agency: 'GovGuide PH Civic Platform',
-          service: 'Citizen Pre-Flight Assistant',
-          section: 'Republic Act No. 11032 Anti-Red Tape Grounding',
-        },
-      ],
+        'Magandang araw! Ako si **GovGuide PH**, ang iyong AI Citizen Assistant.\n\n' +
+        'Maaari kitang tulungan sa mga opisyal na requirements at paghahanda para sa:\n' +
+        '• **PSA Birth Certificate**\n' +
+        '• **NBI Clearance**\n' +
+        '• **Barangay Certificate**\n\n' +
+        'Alin sa mga ito ang kailangan mo ngayon?',
+      sources: [],
     };
   }
 
@@ -228,6 +221,26 @@ export async function streamCitizenChat({
     return;
   }
 
+  // 0. Fast-path for first-time "Hi" greeting — offer PSA, NBI, and Barangay Certificates without backend checking
+  const userTurnCount = messages.filter((m) => m.role === 'user').length;
+  if (
+    userTurnCount <= 1 &&
+    /^(hi|hello|hey|kumusta|kamusta|good\s+(morning|afternoon|evening|day)|magandang\s+(umaga|hapon|gabi|araw)|mabuhay|yo|sup)[!.,?\s]*$/i.test(
+      lastUserMsg.content.trim()
+    )
+  ) {
+    onToken(
+      'Magandang araw! Ako si **GovGuide PH**, ang iyong AI Citizen Assistant.\n\n' +
+        'Maaari kitang tulungan sa mga opisyal na requirements at paghahanda para sa:\n' +
+        '• **PSA Birth Certificate**\n' +
+        '• **NBI Clearance**\n' +
+        '• **Barangay Certificate**\n\n' +
+        'Alin sa mga ito ang kailangan mo ngayon?'
+    );
+    onDone();
+    return;
+  }
+
   // 1. Client-Side Guardrail Pre-Check
   const clientGuardrail = evaluateClientGuardrail(lastUserMsg.content);
   if (clientGuardrail.blocked && clientGuardrail.replyText) {
@@ -309,14 +322,28 @@ export async function streamCitizenChat({
 }
 
 /**
- * Storage helpers to persist the citizen chat thread across popup closes
+ * Storage helpers to persist the citizen chat thread across popup closes,
+ * strictly isolated per authenticated user ID so chats never leak across accounts or after logout.
  */
-export async function loadStoredCitizenChat(): Promise<CitizenChatMessage[]> {
+function getScopedChatStorageKey(userId?: string): string | null {
+  const cleanId = userId?.trim();
+  if (!cleanId || cleanId === 'active' || cleanId === 'e1000000-0000-4000-8000-000000000003') {
+    return null;
+  }
+  return `${CITIZEN_CHAT_STORAGE_KEY}_${cleanId}`;
+}
+
+export async function loadStoredCitizenChat(userId?: string): Promise<CitizenChatMessage[]> {
   return new Promise((resolve) => {
     try {
-      chrome.storage.local.get([CITIZEN_CHAT_STORAGE_KEY], (res) => {
-        if (res && res[CITIZEN_CHAT_STORAGE_KEY] && Array.isArray(res[CITIZEN_CHAT_STORAGE_KEY])) {
-          resolve(res[CITIZEN_CHAT_STORAGE_KEY]);
+      const scopedKey = getScopedChatStorageKey(userId);
+      if (!scopedKey) {
+        resolve([INITIAL_GREETING_MESSAGE]);
+        return;
+      }
+      chrome.storage.local.get([scopedKey], (res) => {
+        if (res && res[scopedKey] && Array.isArray(res[scopedKey])) {
+          resolve(res[scopedKey]);
         } else {
           resolve([INITIAL_GREETING_MESSAGE]);
         }
@@ -327,10 +354,30 @@ export async function loadStoredCitizenChat(): Promise<CitizenChatMessage[]> {
   });
 }
 
-export async function saveStoredCitizenChat(messages: CitizenChatMessage[]): Promise<void> {
+export async function saveStoredCitizenChat(messages: CitizenChatMessage[], userId?: string): Promise<void> {
   return new Promise((resolve) => {
     try {
-      chrome.storage.local.set({ [CITIZEN_CHAT_STORAGE_KEY]: messages.slice(-20) }, () => resolve());
+      const scopedKey = getScopedChatStorageKey(userId);
+      if (!scopedKey) {
+        resolve();
+        return;
+      }
+      chrome.storage.local.set({ [scopedKey]: messages.slice(-20) }, () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function clearStoredCitizenChat(userId?: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const keysToRemove = [CITIZEN_CHAT_STORAGE_KEY];
+      const scopedKey = getScopedChatStorageKey(userId);
+      if (scopedKey) {
+        keysToRemove.push(scopedKey);
+      }
+      chrome.storage.local.remove(keysToRemove, () => resolve());
     } catch {
       resolve();
     }

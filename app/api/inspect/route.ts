@@ -1,3 +1,5 @@
+import { basicQuestionReply } from '@/lib/ai/basic-questions';
+import { isSocialTurn, socialReply } from '@/lib/ai/social-intent';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -1087,11 +1089,12 @@ export async function POST(req: NextRequest) {
     const text: string = (body.text || '').trim();
     const isGuest: boolean = Boolean(
       body.isGuest ||
-        body.applicant?.id === 'e1000000-0000-4000-8000-000000000003' ||
-        body.applicant?.title === 'Guest Account',
+        (body.applicant?.id === 'e1000000-0000-4000-8000-000000000003' &&
+          body.applicant?.title === 'Guest Account' &&
+          (!Array.isArray(body.attachments) || body.attachments.length === 0)),
     );
     const attachments: { name: string; type: string; dataUrl?: string }[] =
-      !isGuest && Array.isArray(body.attachments) ? body.attachments : [];
+      Array.isArray(body.attachments) ? body.attachments : [];
     const savedFiles: SavedVaultFile[] =
       !isGuest && Array.isArray(body.savedFiles) ? body.savedFiles : [];
     const language: string = body.language || 'Auto';
@@ -1170,20 +1173,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const isSimpleGreeting =
-      attachments.length === 0 &&
-      Object.keys(learnedDetails).length === 0 &&
-      (/^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|there|friend)|\s*[!?.])*$/i.test(
-        text.trim(),
-      ) ||
-        (text.trim().split(/\s+/).length <= 4 &&
-          /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text.trim())));
+    const basicReply = attachments.length === 0
+      ? basicQuestionReply(text, isFilipinoQuery(text, language),
+          !isGuest && body.applicant ? redactSecrets(applicant.display_name || '') : undefined)
+      : null;
+    if (basicReply) return NextResponse.json({
+      ok: true, text: basicReply, steps: [], cards: [], inspection: null, next: [], sources: [],
+    });
+
+    const isSimpleGreeting = attachments.length === 0 && isSocialTurn(text);
 
     if (isSimpleGreeting) {
       const isFilGreeting = isFilipinoQuery(text, language);
-      const greetingText = isFilGreeting
-        ? 'Magandang araw! Ako ang **GovGuide PH**. Maaari kitang tulungan sa iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?'
-        : 'Hello! I am **GovGuide PH**. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?';
+      const greetingText = socialReply(text, isFilGreeting);
       return NextResponse.json({
         ok: true,
         steps: [],

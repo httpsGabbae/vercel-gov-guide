@@ -1,3 +1,5 @@
+import { basicQuestionKind, basicQuestionReply } from '@/lib/ai/basic-questions';
+import { isSocialTurn } from '@/lib/ai/social-intent';
 import type { ApplicantProfile, SavedVaultFile } from '@/lib/services/charter-sources';
 import { parseNameParts, formatFullName } from '@/lib/services/charter-sources';
 import { SERVICES_REGISTRY } from '@/lib/services/registry';
@@ -45,7 +47,7 @@ export interface GuardrailEvaluation {
 export function isFilipinoQuery(text: string, language = 'Auto'): boolean {
   const lower = text.toLowerCase();
   const tagalogRegex =
-    /\b(ano|paano|saan|kailan|sino|bakit|magkano|pwede|puwede|ba|po|opo|ang|mga|para|sa|ng|ko|akin|mo|iyo|natin|namin|kanila|naman|lang|kailangan|bayad|libre|pila|kuha|kumuha|ayos|ayusin|paki|pakisuyo|meron|mayroon|wala|walang|ito|nito|dito|dyan|diyan|doon|kamusta|kumusta|salamat|asawa|anak|tatay|nanay|bata|magulang|taga|lahat|tsek|dokumento|pirma|kasal|singleness|serbisyo|gabay|fixer|peke|bawal)\b/i;
+    /\b(ano|paano|saan|kailan|sino|bakit|magkano|pwede|puwede|ba|po|opo|ang|mga|para|sa|ng|ko|akin|mo|iyo|natin|namin|kanila|naman|lang|kailangan|bayad|libre|pila|kuha|kumuha|ayos|ayusin|paki|pakisuyo|meron|mayroon|wala|walang|ito|nito|dito|dyan|diyan|doon|magandang|mabuhay|paalam|ingat|kamusta|kumusta|salamat|asawa|anak|tatay|nanay|bata|magulang|taga|lahat|tsek|dokumento|pirma|kasal|singleness|serbisyo|gabay|fixer|peke|bawal)\b/i;
 
   const englishRegex =
     /\b(what|how|why|when|where|who|is|are|can|could|would|should|do|does|did|will|my|the|this|that|please|requirements|checklist|fee|fees|cost|payment|process|steps|procedure|apply|register|appointment|valid|expired|mismatch|missing|help|birth|clearance|certificate|id|identity|passport|document|photo|review|bypass|ignore|delete|drop|table|system|prompt)\b/i;
@@ -60,7 +62,7 @@ export function isFilipinoQuery(text: string, language = 'Auto'): boolean {
   if (hasTagalog) return true;
 
   // Explicit user preference fallback
-  if (language === 'Filipino' || language === 'fil') return true;
+  if (language === 'Filipino' || language === 'fil' || language === 'Tagalog') return true;
   if (language === 'English' || language === 'en') return false;
 
   return false;
@@ -357,7 +359,7 @@ export function evaluateGuardrails(
         isSecretAttempt
           ? 'Detected attempt to access or expose protected API keys / environment secrets'
           : 'Detected attempt to override Citizen’s Charter rules or tamper with system state',
-        'Redacted sensitive tokens, blocked request, and recorded event to Audit Log',
+        'Redacted sensitive tokens and blocked request',
       ],
       replyText: isSecretAttempt
         ? isFil
@@ -548,16 +550,12 @@ export function evaluateGuardrails(
     /\b(write\s+a\s+(poem|song|essay|python|javascript|react|sql)|solve\s+this\s+math|bitcoin|crypto|stock\s+market|forex|recipe|cook|adobo|sinigang|halo-?halo|regalo|pasko|eleksyon\s+sa\s+amerika|kantahan|gawan\s+ng\s+tula|fix\s+my\s+car|car\s+engine|scrape\s+facebook|capital\s+of\s+france|nba\s+championship|nba\s+score|movie\s+review|horoscope|zodiac|videogame|valorant|dota|minecraft)\b/i,
   ];
 
-  const isAssistantIdentityOrGreeting =
-    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|kaagapai|there|friend)|\s*[!?.])*$/i.test(text) ||
-    (text.split(/\s+/).length <= 4 && /^(hi|hello|hey|kumusta|kamusta)\b/i.test(text)) ||
-    /^(who|what|sino|ano)\s+(are|is|r)\s+(you|u|this|govguide|kaagap)/i.test(text) ||
-    /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+ka\s+ba|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|how\s+can\s+you\s+help|what\s+services\s+do\s+you|ano\s+ang\s+magagawa\s+mo|paano\s+ka\s+makakatulong|magpakilala\s+ka|help\s+me|can\s+you\s+help|pwede\s+magtanong)\b/i.test(text);
+  const isAssistantIdentityOrGreeting = isSocialTurn(text);
 
   const isOutOfScope =
     isPureNumberOrSymbols ||
     obviousOutOfScopePatterns.some((rx) => rx.test(text)) ||
-    (!isAssistantIdentityOrGreeting && !civicOrSystemKeywords.test(text));
+    (!isAssistantIdentityOrGreeting && !basicQuestionKind(text) && !civicOrSystemKeywords.test(text));
 
   if (isOutOfScope) {
     return {
@@ -609,6 +607,8 @@ export function answerSystemQuestion(
   const text = rawText.trim();
   const lower = text.toLowerCase();
   const isFil = isFilipinoQuery(text, language);
+  const basicReply = basicQuestionReply(text, isFil, redactSecrets(applicant.display_name || ''));
+  if (basicReply) return { replyText: basicReply, serviceCode: 'GENERAL', includeChecklist: false, steps: [] };
   const resolvedCode =
     detectedServiceCode ||
     (lower.includes('nbi') || lower.includes('clearance')
@@ -621,12 +621,7 @@ export function answerSystemQuestion(
   const serviceDef = SERVICES_REGISTRY[resolvedCode] || SERVICES_REGISTRY.NBI_CLEARANCE;
 
   // 1. Greetings / Assistant Identity / General Help / System Overview
-  if (
-    /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta|help|tulong|who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+can\s+you\s+do|ano\s+ang\s+kaya\s+mong\s+gawin|how\s+does\s+this\s+work|how\s+can\s+you\s+help|what\s+services\s+do\s+you)\b/i.test(
-      lower,
-    ) &&
-    text.split(/\s+/).length <= 15
-  ) {
+  if (isSocialTurn(text)) {
     const isIdentityQuery = /\b(who\s+are\s+you|who\s+r\s+u|what\s+are\s+you|what\s+is\s+this|what\s+is\s+your\s+name|what\s+do\s+you\s+do|sino\s+ka|sino\s+po\s+kayo|ano\s+ka|ano\s+ito|introduce\s+yourself|tell\s+me\s+about\s+yourself)\b/i.test(
       lower,
     );

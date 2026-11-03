@@ -6,6 +6,7 @@ import {
   streamCitizenChat,
   loadStoredCitizenChat,
   saveStoredCitizenChat,
+  clearStoredCitizenChat,
   INITIAL_GREETING_MESSAGE,
 } from '../lib/citizen-chat';
 
@@ -168,9 +169,13 @@ export function App() {
           setAiLetterDraft('');
           setAiKeywords('');
           setChatMessages([INITIAL_GREETING_MESSAGE]);
-          try {
-            saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
-          } catch {}
+          if (next.isAuthenticated && (next.userId || next.citizenId)) {
+            loadStoredCitizenChat(next.userId || next.citizenId).then((msgs) => {
+              if (msgs && msgs.length > 0) setChatMessages(msgs);
+            });
+          } else {
+            void clearStoredCitizenChat(prev?.userId || prev?.citizenId);
+          }
           routeForSession(next);
         }
       }
@@ -208,9 +213,9 @@ export function App() {
             setRequests([]);
             selectRequest(null);
             setChatMessages([INITIAL_GREETING_MESSAGE]);
-            try {
-              saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
-            } catch {}
+            loadStoredCitizenChat(res.session.userId || res.session.citizenId).then((msgs) => {
+              if (msgs && msgs.length > 0) setChatMessages(msgs);
+            });
           }
           routeForSession(res.session);
         } else {
@@ -221,6 +226,7 @@ export function App() {
   };
 
   const handleLogout = () => {
+    const prevUserId = sessionRef.current?.userId || sessionRef.current?.citizenId;
     chrome.runtime.sendMessage({ type: 'LOGOUT' }, (res) => {
       setSession(res?.session || null);
       sessionRef.current = res?.session || null;
@@ -233,9 +239,7 @@ export function App() {
       setAiLetterDraft('');
       setAiKeywords('');
       setChatMessages([INITIAL_GREETING_MESSAGE]);
-      try {
-        saveStoredCitizenChat([INITIAL_GREETING_MESSAGE]);
-      } catch {}
+      void clearStoredCitizenChat(prevUserId);
     });
   };
 
@@ -372,12 +376,19 @@ export function App() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    loadStoredCitizenChat().then((msgs) => {
+    if (!session || !session.isAuthenticated) {
+      setChatMessages([INITIAL_GREETING_MESSAGE]);
+      return;
+    }
+    const uid = session.userId || session.citizenId;
+    loadStoredCitizenChat(uid).then((msgs) => {
       if (msgs && msgs.length > 0) {
         setChatMessages(msgs);
+      } else {
+        setChatMessages([INITIAL_GREETING_MESSAGE]);
       }
     });
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (chatBottomRef.current) {
@@ -432,8 +443,11 @@ export function App() {
       },
       onDone: () => {
         setIsChatLoading(false);
+        const uid = sessionRef.current?.userId || sessionRef.current?.citizenId;
         setChatMessages((prev) => {
-          saveStoredCitizenChat(prev);
+          if (sessionRef.current?.isAuthenticated && uid) {
+            void saveStoredCitizenChat(prev, uid);
+          }
           return prev;
         });
       },
@@ -446,7 +460,8 @@ export function App() {
   const handleClearCitizenChat = () => {
     const initial = [INITIAL_GREETING_MESSAGE];
     setChatMessages(initial);
-    saveStoredCitizenChat(initial);
+    const uid = sessionRef.current?.userId || sessionRef.current?.citizenId;
+    void clearStoredCitizenChat(uid);
     flash({ text: 'Chat history reset.', type: 'success' }, 2000);
   };
 

@@ -203,11 +203,28 @@ async function m(e, t) {
 	}
 	throw Error("No applicant profile returned from GovGuide");
 }
+// extension/src/lib/citizen-chat.ts
+var h = "govguide_citizen_chat_history";
+(/* @__PURE__ */ new Date()).toISOString();
+function g(e) {
+	let t = e?.trim();
+	return !t || t === "active" || t === "e1000000-0000-4000-8000-000000000003" ? null : `${h}_${t}`;
+}
+async function _(e) {
+	return new Promise((t) => {
+		try {
+			let n = [h], r = g(e);
+			r && n.push(r), chrome.storage.local.remove(n, () => t());
+		} catch {
+			t();
+		}
+	});
+}
 // extension/src/background/index.ts
 chrome.runtime.onInstalled.addListener(() => {
-	h();
+	v();
 });
-function h() {
+function v() {
 	chrome.contextMenus.removeAll(() => {
 		chrome.contextMenus.create({
 			id: "govguide_root",
@@ -268,21 +285,21 @@ chrome.contextMenus.onClicked.addListener(async (e, t) => {
 		args: [r]
 	});
 });
-function g(e) {
+function y(e) {
 	try {
 		chrome.runtime.sendMessage({
 			type: "SESSION_UPDATED",
-			session: _(e)
+			session: b(e)
 		}, () => {
 			chrome.runtime.lastError;
 		});
 	} catch {}
 }
-function _(e) {
+function b(e) {
 	let { accessToken: t, refreshToken: n, ...r } = e;
 	return r;
 }
-async function v(e, t, n) {
+async function x(e, t, n) {
 	let r = await u({
 		isAuthenticated: !0,
 		authSource: n,
@@ -297,11 +314,12 @@ async function v(e, t, n) {
 		refreshToken: t.refreshToken,
 		expiresAt: t.expiresAt
 	});
-	return g(r), r;
+	return y(r), r;
 }
-async function y() {
-	await f(s);
-	let e = await u({
+async function S() {
+	let e = await l();
+	await f(s), await _(e.userId || e.citizenId);
+	let t = await u({
 		isAuthenticated: !1,
 		authSource: void 0,
 		userRole: "guest",
@@ -316,16 +334,16 @@ async function y() {
 		refreshToken: void 0,
 		expiresAt: void 0
 	});
-	g(e);
+	y(t);
 	try {
 		chrome.runtime.sendMessage({
 			type: "VAULT_UPDATED",
 			vault: s
 		});
 	} catch {}
-	return e;
+	return t;
 }
-async function b(e) {
+async function C(e) {
 	if (!e.refreshToken) return null;
 	try {
 		let t = await fetch(`${e.apiBaseUrl}/api/extension/auth`, {
@@ -333,12 +351,12 @@ async function b(e) {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ refreshToken: e.refreshToken })
 		}), n = await t.json();
-		return !t.ok || !n.success ? null : await v(n.user, n.tokens, e.authSource || "extension");
+		return !t.ok || !n.success ? null : await x(n.user, n.tokens, e.authSource || "extension");
 	} catch {
 		return null;
 	}
 }
-async function x(e, t = {}) {
+async function w(e, t = {}) {
 	let n = await l(), r = (e) => {
 		let n = {
 			"Content-Type": "application/json",
@@ -351,34 +369,34 @@ async function x(e, t = {}) {
 		headers: r
 	}), a = await i(r(n.accessToken));
 	if (a.status === 401 && n.refreshToken) {
-		let e = await b(n);
+		let e = await C(n);
 		e && e.accessToken && (n = e, a = await i(r(e.accessToken)));
 	}
 	return a;
 }
-var S = null;
-async function C(e) {
+var T = null;
+async function E(e) {
 	let t = await l();
-	if (e.signedOut || !e.accessToken) return t.isAuthenticated && t.authSource === "web" ? { session: _(await y()) } : { session: _(t) };
-	if (t.isAuthenticated && t.accessToken === e.accessToken || S === e.accessToken) return { session: _(t) };
-	S = e.accessToken;
+	if (e.signedOut || !e.accessToken) return t.isAuthenticated && t.authSource === "web" ? { session: b(await S()) } : { session: b(t) };
+	if (t.isAuthenticated && t.accessToken === e.accessToken || T === e.accessToken) return { session: b(t) };
+	T = e.accessToken;
 	try {
 		let n = await fetch(`${t.apiBaseUrl}/api/extension/auth`, { headers: { Authorization: `Bearer ${e.accessToken}` } }), r = await n.json();
 		return !n.ok || !r.success ? {
-			session: _(t),
+			session: b(t),
 			error: r.error || "Web session could not be verified"
-		} : { session: _(await v(r.user, {
+		} : { session: b(await x(r.user, {
 			accessToken: e.accessToken,
 			refreshToken: e.refreshToken || ""
 		}, "web")) };
 	} finally {
-		S = null;
+		T = null;
 	}
 }
-chrome.runtime.onMessage.addListener((e, t, n) => (w(e).then(n).catch((e) => {
+chrome.runtime.onMessage.addListener((e, t, n) => (D(e).then(n).catch((e) => {
 	n({ error: e.message || "Unknown background error" });
 }), !0));
-async function w(e) {
+async function D(e) {
 	switch (e.type) {
 		case "GET_VAULT":
 			try {
@@ -406,10 +424,10 @@ async function w(e) {
 				lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
 			};
 			r && (h.apiBaseUrl = r);
-			let _ = o.userId !== a || o.citizenId !== a || o.userRole !== c || s && o.fullName !== m;
-			(s || _) && (h.isAuthenticated = !0, h.authSource = "web", h.userRole = c, h.userId = a, h.email = t?.email || o.email || "citizen@govguide.ph", h.fullName = m);
-			let v = await u(h);
-			(!o.isAuthenticated && v.isAuthenticated || _) && g(v);
+			let g = o.userId !== a || o.citizenId !== a || o.userRole !== c || s && o.fullName !== m;
+			(s || g) && (h.isAuthenticated = !0, h.authSource = "web", h.userRole = c, h.userId = a, h.email = t?.email || o.email || "citizen@govguide.ph", h.fullName = m);
+			let _ = await u(h);
+			(!o.isAuthenticated && _.isAuthenticated || g) && y(_);
 			try {
 				chrome.runtime.sendMessage({
 					type: "VAULT_UPDATED",
@@ -421,29 +439,10 @@ async function w(e) {
 				vault: i
 			};
 		}
-		case "GET_SESSION": {
-			let e = await l();
-			if (!e.isAuthenticated && e.isOnlineSyncEnabled) try {
-				let t = e.citizenId && e.citizenId !== "967760de-3912-5aaf-8ce9-48b2a8dd55f0" ? e.citizenId : "active", n = await fetch(`${e.apiBaseUrl}/api/citizen/details?citizenId=${encodeURIComponent(t)}`);
-				if (n.ok) {
-					let r = await n.json(), i = r?.applicant;
-					r?.ok && i && (r.source === "active_session_cache" || r.source === "supabase_profile" || i.display_name?.trim() || i.first_name?.trim() || i.email?.trim()) && (await f(p(i, await d())), e = await u({
-						isAuthenticated: !0,
-						authSource: "web",
-						userRole: "citizen",
-						userId: i.id || t,
-						citizenId: i.id || t,
-						email: i.email || "citizen@govguide.ph",
-						fullName: i.display_name || [i.first_name, i.last_name].filter(Boolean).join(" ") || "Citizen Session",
-						lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
-					}));
-				}
-			} catch {}
-			return { session: _(e) };
-		}
+		case "GET_SESSION": return { session: b(await l()) };
 		case "SET_SESSION": {
 			let { isAuthenticated: t, userRole: n, accessToken: r, refreshToken: i, authSource: a, ...o } = e.payload;
-			return { session: _(await u(o)) };
+			return { session: b(await u(o)) };
 		}
 		case "LOGIN": {
 			let t = await l(), n = await fetch(`${t.apiBaseUrl}/api/extension/auth`, {
@@ -459,14 +458,14 @@ async function w(e) {
 				error: r.error || "Invalid email or password."
 			} : (t.userId && t.userId !== r.user.userId && await f(s), {
 				success: !0,
-				session: _(await v(r.user, r.tokens, "extension"))
+				session: b(await x(r.user, r.tokens, "extension"))
 			});
 		}
 		case "LOGOUT": return {
 			success: !0,
-			session: _(await y())
+			session: b(await S())
 		};
-		case "SYNC_WEB_AUTH": return await C(e.payload);
+		case "SYNC_WEB_AUTH": return await E(e.payload);
 		case "SYNC_FROM_GOVGUIDE": {
 			let t = await l(), n = e.payload?.citizenId || (t.citizenId && t.citizenId !== "967760de-3912-5aaf-8ce9-48b2a8dd55f0" ? t.citizenId : "active"), r = await m(t.apiBaseUrl, n);
 			try {
@@ -481,7 +480,7 @@ async function w(e) {
 			};
 		}
 		case "FETCH_AGENCY_REQUESTS": try {
-			let t = e.payload?.q?.trim() || "", n = await x(`/api/agency/requests${t ? `?q=${encodeURIComponent(t)}` : ""}`), r = await n.json();
+			let t = e.payload?.q?.trim() || "", n = await w(`/api/agency/requests${t ? `?q=${encodeURIComponent(t)}` : ""}`), r = await n.json();
 			if (!n.ok || !r.success) throw Error(r.error || "Failed to load agency requests");
 			return {
 				success: !0,
@@ -495,7 +494,7 @@ async function w(e) {
 			};
 		}
 		case "UPDATE_REQUEST_STATUS": try {
-			let t = await x("/api/agency/requests", {
+			let t = await w("/api/agency/requests", {
 				method: "PATCH",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(e.payload)

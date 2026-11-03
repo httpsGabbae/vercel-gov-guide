@@ -1,5 +1,9 @@
 'use client';
 
+import { DetailsPinGate } from '@/components/citizen/DetailsPinGate';
+import { detailsFetch, clearDetailsAccess, hasDetailsAccess, DETAILS_LOCK_EVENT } from '@/lib/citizen/details-access';
+import { isFilipinoQuery } from '@/lib/ai/guardrails';
+import { isSocialTurn, socialReply } from '@/lib/ai/social-intent';
 import React, {
   createContext,
   useCallback,
@@ -2924,6 +2928,7 @@ export default function CitizenChatPage() {
 
   const [applicant, setApplicant] = useState<ApplicantProfile>(() => PROFILES.new_citizen);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [detailsReady, setDetailsReady] = useState(false);
   const [savedFiles, setSavedFiles] = useState<SavedVaultFile[]>([]);
   const [checklistItems, setChecklistItems] =
     useState<ChecklistRequirementItem[]>(createCleanChecklists);
@@ -2964,6 +2969,37 @@ export default function CitizenChatPage() {
   const lastComposerTopRef = useRef<number | null>(null);
   const msgCounterRef = useRef(1);
 
+  useEffect(() => {
+    const locked = () => {
+      setDetailsReady(false);
+      setSavedFiles([]);
+      setInspections([]);
+      setChecklistItems(createCleanChecklists());
+      setLightbox(null);
+      setApplicant((prev) => ({ ...PROFILES.new_citizen, id: prev.id, role: prev.role,
+        display_name: prev.display_name, initials: prev.initials, title: prev.title }));
+      localStorage.removeItem('govguide_active_applicant');
+      localStorage.removeItem('govguide_active_citizen_id');
+    };
+    window.addEventListener(DETAILS_LOCK_EVENT, locked);
+    localStorage.removeItem('govguide_active_applicant');
+    return () => window.removeEventListener(DETAILS_LOCK_EVENT, locked);
+  }, []);
+
+  const loadUnlockedDetails = async () => {
+    if (!authUser || !hasDetailsAccess(authUser.id)) throw new Error('Please unlock My Details again.');
+    const response = await detailsFetch('/api/citizen/details');
+    const data = await response.json();
+    if (!response.ok || !data.ok || !data.applicant || !hasDetailsAccess(authUser.id)) {
+      throw new Error(data.message || 'Unable to load My Details. Please try again.');
+    }
+    setApplicant((prev) => ({ ...prev, ...data.applicant, id: authUser.id }));
+    setSavedFiles(Array.isArray(data.savedFiles) ? data.savedFiles : []);
+    setChecklistItems(Array.isArray(data.checklistItems) ? data.checklistItems : createCleanChecklists());
+    setInspections(Array.isArray(data.inspections) ? data.inspections : []);
+    setDetailsReady(true);
+  };
+
   // Hydrate My Details (profile, files, checklists, inspections, chat threads) directly from Supabase
   useEffect(() => {
     let isMounted = true;
@@ -2976,13 +3012,21 @@ export default function CitizenChatPage() {
         if (!authData?.user) {
           // Guest Mode: temporary session — do not load or persist any threads or profile details
           if (isMounted) {
-            setAuthUser(null);
+            clearDetailsAccess();
+          setAuthUser(null);
             setApplicant(PROFILES.new_citizen);
             setThreads([]);
             setActiveThreadId(null);
             setSavedFiles([]);
             setChecklistItems(createCleanChecklists());
             setInspections([]);
+            setAgencyMilestones([]);
+            try {
+              localStorage.removeItem('govguide_active_applicant');
+              localStorage.removeItem('govguide_active_citizen_id');
+              localStorage.removeItem('govguide_read_notifications');
+              window.postMessage({ type: 'GOVGUIDE_USER_SIGNED_OUT', timestamp: Date.now() }, '*');
+            } catch {}
           }
           return;
         }
@@ -2991,10 +3035,13 @@ export default function CitizenChatPage() {
           const user = authData.user;
           setAuthUser(user);
           const targetCitizenId = user.id;
+          // Reset threads/state before loading this specific citizen's data
+          setThreads([]);
+          setActiveThreadId(null);
 
           const { data: profile } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, role, agency_id, full_name')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -3018,7 +3065,7 @@ export default function CitizenChatPage() {
 
             const displayName = isAgency && agencyObj
               ? `${agencyObj.name} (${agencyObj.code})`
-              : (profile.full_name || profile.first_name || user.email?.split('@')[0] || 'Citizen Applicant');
+              : (profile.full_name || user.email?.split('@')[0] || 'Citizen Applicant');
 
             const initials = isAgency && agencyObj
               ? agencyObj.code
@@ -3033,32 +3080,22 @@ export default function CitizenChatPage() {
               id: profile.id,
               role: isAgency ? 'agency_admin' : 'citizen',
               display_name: displayName,
-              first_name: isAgency && agencyObj ? agencyObj.name : (profile.first_name || undefined),
-              middle_name: profile.middle_name || undefined,
-              last_name: isAgency && agencyObj ? `(${agencyObj.code})` : (profile.last_name || undefined),
-              suffix: profile.suffix || undefined,
-              birth_date: profile.birth_date || '',
-              civil_status: profile.civil_status || '',
-              barangay: profile.barangay || '',
-              city: profile.city || '',
-              phone: profile.phone || '',
-              email: profile.email || user.email || '',
+              first_name: isAgency && agencyObj ? agencyObj.name : undefined,
+              middle_name: undefined,
+              last_name: isAgency && agencyObj ? `(${agencyObj.code})` : undefined,
+              suffix: undefined,
+              birth_date: '',
+              civil_status: '',
+              barangay: '',
+              city: '',
+              phone: '',
+              email: user.email || '',
               initials,
               title,
             }));
           }
 
-          // 1. Fetch citizen profile, vault documents, checklists, inspections from Supabase
-          const detailsRes = await fetch(`/api/citizen/details?citizenId=${encodeURIComponent(targetCitizenId)}`);
-          if (detailsRes.ok && isMounted) {
-            const { data } = await safeResponseJson(detailsRes);
-            if (data?.ok && data.applicant) {
-              setApplicant((prev) => ({ ...prev, ...data.applicant }));
-              if (Array.isArray(data.savedFiles)) setSavedFiles(data.savedFiles);
-              if (Array.isArray(data.checklistItems)) setChecklistItems(data.checklistItems);
-              if (Array.isArray(data.inspections)) setInspections(data.inspections);
-            }
-          }
+          // My Details is loaded only after PIN verification.
 
           // 2. Fetch chat threads directly from Supabase for this authenticated citizen only
           const threadsRes = await fetch(`/api/chat/threads?citizenId=${encodeURIComponent(targetCitizenId)}`);
@@ -3079,10 +3116,19 @@ export default function CitizenChatPage() {
 
     void hydrateFromSupabase();
 
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user && isMounted) {
-        setAuthUser(session.user);
-      } else if (!session && isMounted) {
+        setAuthUser((prev) => {
+          if (!prev || prev.id !== session.user.id) {
+            clearDetailsAccess();
+            setThreads([]);
+            setActiveThreadId(null);
+            void hydrateFromSupabase();
+          }
+          return session.user;
+        });
+      } else if ((!session || event === 'SIGNED_OUT') && isMounted) {
+        clearDetailsAccess();
         setAuthUser(null);
         setApplicant(PROFILES.new_citizen);
         setThreads([]);
@@ -3090,6 +3136,13 @@ export default function CitizenChatPage() {
         setSavedFiles([]);
         setChecklistItems(createCleanChecklists());
         setInspections([]);
+        setAgencyMilestones([]);
+        try {
+          localStorage.removeItem('govguide_active_applicant');
+          localStorage.removeItem('govguide_active_citizen_id');
+          localStorage.removeItem('govguide_read_notifications');
+          window.postMessage({ type: 'GOVGUIDE_USER_SIGNED_OUT', timestamp: Date.now() }, '*');
+        } catch {}
       }
     });
 
@@ -3097,7 +3150,6 @@ export default function CitizenChatPage() {
       isMounted = false;
       authSub.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Real-time synchronization with Chrome Extension & Agency Officer updates (Authenticated only)
@@ -3207,30 +3259,12 @@ export default function CitizenChatPage() {
     };
   }, [authUser, applicant.id, activeThreadId]);
 
-  // Persist Citizen Details & Broadcast to Chrome Extension in real-time (Authenticated only)
+  // Save only after the protected details payload has been loaded.
   useEffect(() => {
-    if (!authUser || applicant.id === PROFILES.new_citizen.id) return;
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('govguide_active_applicant', JSON.stringify(applicant));
-        localStorage.setItem('govguide_active_citizen_id', applicant.id);
-        window.postMessage(
-          {
-            type: 'GOVGUIDE_MY_DETAILS_UPDATED',
-            applicant,
-            citizenId: applicant.id,
-            timestamp: Date.now(),
-          },
-          '*'
-        );
-      } catch {
-        // Safe ignore
-      }
-    }
+    if (!authUser || !detailsReady || !hasDetailsAccess(authUser.id) || applicant.id !== authUser.id) return;
 
     const timer = setTimeout(() => {
-      void fetch('/api/citizen/details', {
+      void detailsFetch('/api/citizen/details', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3243,7 +3277,7 @@ export default function CitizenChatPage() {
       });
     }, 250);
     return () => clearTimeout(timer);
-  }, [authUser, applicant, savedFiles, checklistItems, inspections]);
+  }, [authUser, detailsReady, applicant, savedFiles, checklistItems, inspections]);
 
   const syncThreadToSupabase = useCallback(
     async (thread: ConversationThread) => {
@@ -3418,9 +3452,7 @@ export default function CitizenChatPage() {
       const isSimpleFirstGreeting =
         isFirstTurnInChat &&
         filesToSend.length === 0 &&
-        /^(hi|hello|hey|good\s+(morning|afternoon|evening)|kumusta|kamusta)(\s+(po|govguide|govguideph|there|friend)|\s*[!?.])*$/i.test(
-          textToSend,
-        );
+        isSocialTurn(textToSend);
 
       let threadId = activeThreadId;
       if (threadId === null) {
@@ -3441,11 +3473,8 @@ export default function CitizenChatPage() {
         const agentMsgId = `agt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         latestPromptTurnIdRef.current = String(userMsgId);
 
-        const isFilGreeting =
-          language === 'Filipino' || /^(kumusta|kamusta)\b/i.test(textToSend);
-        const greetingReplyText = isFilGreeting
-          ? 'Magandang araw! Ako ang **GovGuide PH**. Maaari kitang tulungan sa iyong **PSA Birth Certificate**, **NBI Clearance**, at **Barangay Certificate**. Alin sa mga ito ang kailangan mo ngayon?'
-          : 'Hello! I am **GovGuide PH**. I can help you with your **PSA Birth Certificate**, **NBI Clearance**, and **Barangay Certificate** requirements. Which one would you like to start with?';
+        const isFilGreeting = isFilipinoQuery(textToSend, language);
+        const greetingReplyText = socialReply(textToSend, isFilGreeting);
 
         const greetingUserMsg: ChatMessage = {
           id: userMsgId,
@@ -3906,7 +3935,7 @@ export default function CitizenChatPage() {
         setBusy(false);
       }
     },
-    [attachedFiles, inputText, busy, activeThreadId, applicant, savedFiles, language, syncThreadToSupabase],
+    [attachedFiles, inputText, busy, activeThreadId, threads, applicant, savedFiles, language, syncThreadToSupabase],
   );
 
   const loadDemoAndSend = useCallback(
@@ -4241,15 +4270,14 @@ export default function CitizenChatPage() {
   );
 
   const handleResetMyDetailsToDemo = useCallback(() => {
-    const defaultProfile = PROFILES.new_citizen;
+    if (!authUser || !hasDetailsAccess(authUser.id)) return;
+    const defaultProfile = { ...PROFILES.new_citizen, id: authUser.id };
     setApplicant(defaultProfile);
     setSavedFiles([]);
     setChecklistItems(createCleanChecklists());
     setInspections([]);
-    void fetch(`/api/citizen/details?citizenId=${encodeURIComponent(defaultProfile.id)}`, {
-      method: 'DELETE',
-    });
-  }, []);
+    void detailsFetch('/api/citizen/details', { method: 'DELETE' });
+  }, [authUser]);
 
   const openFilePicker = (kind: 'any' | 'image' | 'pdf' = 'any') => {
     const input = fileInputRef.current;
@@ -4743,9 +4771,21 @@ export default function CitizenChatPage() {
                             setAuthUser(null);
                             setApplicant(PROFILES.new_citizen);
                             setRole('new_citizen');
+                            setThreads([]);
+                            setActiveThreadId(null);
                             setSavedFiles([]);
                             setChecklistItems(createCleanChecklists());
                             setInspections([]);
+                            setAgencyMilestones([]);
+                            try {
+                              localStorage.removeItem('govguide_active_applicant');
+                              localStorage.removeItem('govguide_active_citizen_id');
+                              localStorage.removeItem('govguide_read_notifications');
+                              window.postMessage({ type: 'GOVGUIDE_USER_SIGNED_OUT', timestamp: Date.now() }, '*');
+                            } catch {}
+                            try {
+                              await detailsFetch('/api/citizen/details', { method: 'DELETE' });
+                            } catch {}
                           }}
                         >
                           Sign Out
@@ -4861,6 +4901,7 @@ export default function CitizenChatPage() {
 
           {/* Active View Router */}
           {isMyDetailsActive && (
+            <DetailsPinGate key={authUser?.id || 'guest'} userId={authUser?.id} onUnlocked={loadUnlockedDetails} onBack={() => setView('chat')}>
             <MyDetailsView
               applicant={applicant}
               onUpdateApplicant={(next) => {
@@ -4889,6 +4930,7 @@ export default function CitizenChatPage() {
               }
               onPreviewImage={(src, name) => setLightbox({ src, name })}
             />
+            </DetailsPinGate>
           )}
 
           {view === 'notifications' && (

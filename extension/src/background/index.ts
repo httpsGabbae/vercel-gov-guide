@@ -5,6 +5,7 @@
  */
 
 import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault, EMPTY_VAULT_DATA } from '../lib/vault';
+import { clearStoredCitizenChat } from '../lib/citizen-chat';
 import type { ExtensionMessage, ExtensionSession, UserRole } from '../types';
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -154,7 +155,9 @@ async function applyAuth(
 }
 
 async function clearAuth(): Promise<ExtensionSession> {
+  const prev = await getSession();
   await saveLocalVault(EMPTY_VAULT_DATA);
+  await clearStoredCitizenChat(prev.userId || prev.citizenId);
   const session = await saveSession({
     isAuthenticated: false,
     authSource: undefined,
@@ -360,50 +363,6 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
     }
     case 'GET_SESSION': {
       let session = await getSession();
-      if (!session.isAuthenticated && session.isOnlineSyncEnabled) {
-        try {
-          const targetId =
-            session.citizenId && session.citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0'
-              ? session.citizenId
-              : 'active';
-          const res = await fetch(
-            `${session.apiBaseUrl}/api/citizen/details?citizenId=${encodeURIComponent(targetId)}`
-          );
-          if (res.ok) {
-            const json = await res.json();
-            const app = json?.applicant;
-            const hasActiveIdentity =
-              json?.ok &&
-              app &&
-              (json.source === 'active_session_cache' ||
-                json.source === 'supabase_profile' ||
-                Boolean(app.display_name?.trim()) ||
-                Boolean(app.first_name?.trim()) ||
-                Boolean(app.email?.trim()));
-
-            if (hasActiveIdentity) {
-              const currentVault = await loadLocalVault();
-              const syncedVault = applicantToVault(app, currentVault);
-              await saveLocalVault(syncedVault);
-              session = await saveSession({
-                isAuthenticated: true,
-                authSource: 'web',
-                userRole: 'citizen',
-                userId: app.id || targetId,
-                citizenId: app.id || targetId,
-                email: app.email || 'citizen@govguide.ph',
-                fullName:
-                  app.display_name ||
-                  [app.first_name, app.last_name].filter(Boolean).join(' ') ||
-                  'Citizen Session',
-                lastSyncedAt: new Date().toISOString(),
-              });
-            }
-          }
-        } catch {
-          // Offline or no active chat session
-        }
-      }
       return { session: publicSession(session) };
     }
     case 'SET_SESSION': {

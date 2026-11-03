@@ -90,7 +90,7 @@ async function initialize() {
     }
   });
 
-  // 4. Live synchronization bridge with GovGuide PH web application ("My Details")
+  // 4. Live synchronization bridge with GovGuide PH web application ("My Details" & Sign Out)
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'GOVGUIDE_MY_DETAILS_UPDATED') {
       const { applicant, citizenId } = event.data;
@@ -112,6 +112,17 @@ async function initialize() {
           }
         );
       }
+    }
+    if (event.data && event.data.type === 'GOVGUIDE_USER_SIGNED_OUT') {
+      lastWebAuthToken = null;
+      lastPushedApplicantJson = null;
+      lastPushedCitizenId = null;
+      cachedVault = null;
+      try {
+        chrome.runtime.sendMessage({ type: 'SYNC_WEB_AUTH', payload: { signedOut: true } }, () => {
+          void chrome.runtime.lastError;
+        });
+      } catch {}
     }
   });
 
