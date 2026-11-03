@@ -1,6 +1,6 @@
 export interface ApplicantProfile {
   id: string;
-  role: 'jobseeker' | 'married_applicant' | 'new_citizen';
+  role: 'jobseeker' | 'married_applicant' | 'new_citizen' | 'agency_admin' | 'citizen';
   display_name: string;
   first_name?: string;
   middle_name?: string;
@@ -109,6 +109,58 @@ export function parseNameParts(fullName: string): {
     last_name: tokens.slice(2).join(' '),
     suffix,
   };
+}
+
+export function parseAddressParts(rawAddress: string): {
+  street: string;
+  barangay: string;
+  city: string;
+  province: string;
+} {
+  const raw = (rawAddress || '').trim();
+  if (!raw) return { street: '', barangay: '', city: '', province: '' };
+
+  const segments = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  let street = '';
+  let barangay = '';
+  let city = '';
+  let province = '';
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const lower = seg.toLowerCase();
+    if (/^(brgy\.?|barangay)\b/i.test(lower) || /\b(brgy\.?|barangay)\b/i.test(lower)) {
+      barangay = seg;
+    } else if (/\bcity\b/i.test(lower) || /\bmunicipality\b/i.test(lower)) {
+      city = seg;
+    } else if (
+      /metro manila|ncr|batangas|cavite|laguna|rizal|quezon|bulacan|pampanga|cebu|davao|iloilo|pangasinan|benguet/i.test(
+        lower,
+      )
+    ) {
+      province = seg;
+    }
+  }
+
+  // Fallback positional assignment if standard comma separated 3 or 4 segments
+  if (segments.length >= 3 && (!street || !city)) {
+    if (!street) street = segments[0];
+    if (!barangay && segments.length >= 3) {
+      const bSeg = segments.find((s) => /brgy|barangay/i.test(s));
+      barangay = bSeg || segments[1];
+    }
+    if (!city && segments.length >= 3) {
+      const cIdx = segments.findIndex((s) => /city|municipality/i.test(s));
+      city = cIdx !== -1 ? segments[cIdx] : segments[segments.length - 2];
+    }
+    if (!province && segments.length >= 4) {
+      province = segments[segments.length - 1];
+    }
+  } else if (!street && segments.length > 0) {
+    street = segments[0];
+  }
+
+  return { street, barangay, city, province };
 }
 
 export interface SavedVaultFile {

@@ -34,7 +34,7 @@ describe('My Details Document & Checklist Reconciliation (Auto-Check & Skip)', (
     return {
       size_label: '140 KB',
       mime_type: 'image/png',
-      uploaded_at: '2026-10-30T10:00:00.000Z',
+      uploaded_at: '2026-11-03T10:00:00.000Z',
       ...file,
     };
   }

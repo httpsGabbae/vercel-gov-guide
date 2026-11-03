@@ -531,7 +531,7 @@ export function OfficialPsaBirthCertForm({
               <span>Certified Official PSA CRS Form Format · Zero Discrepancy Assurance</span>
             </div>
             <div className="font-mono text-[9px]">
-              Official Reference: <span className="font-bold text-slate-800">{refNumber}</span> · Generated 2026-10-30
+              Official Reference: <span className="font-bold text-slate-800">{refNumber}</span> · Generated 2026-11-03
             </div>
           </div>
         </div>

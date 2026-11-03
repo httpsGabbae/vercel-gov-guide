@@ -1,126 +1,192 @@
-import React, { useState, useEffect } from 'react';
-import type { CitizenVaultData, ExtensionSession, AgencyServiceRequest, MilestoneStatus } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { CitizenVaultData, ExtensionSession, AgencyServiceRequest, ProcessStatus } from '../types';
+
+const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
+  { value: 'on_process', label: 'On Process' },
+  { value: 'missing_details', label: 'Missing Details' },
+  { value: 'complete', label: 'Complete' },
+];
+
+const processLabel = (s?: ProcessStatus) =>
+  PROCESS_STATUS_OPTIONS.find((o) => o.value === s)?.label || 'On Process';
+
+const isAgencyRole = (role?: string) => role === 'agency_admin' || role === 'platform_admin';
+
+type StatusMsg = { text: string; type: 'success' | 'warning' | 'error' } | null;
 
 export function App() {
-  const [tab, setTab] = useState<'vault' | 'tracker' | 'agency'>('vault');
   const [session, setSession] = useState<ExtensionSession | null>(null);
   const [vault, setVault] = useState<CitizenVaultData | null>(null);
   const [editFormData, setEditFormData] = useState<CitizenVaultData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null);
+  const [autofilling, setAutofilling] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<StatusMsg>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
 
-  // Agency Tab States
+  // Login form
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  // Agency side
   const [requests, setRequests] = useState<AgencyServiceRequest[]>([]);
-  const [selectedReqId, setSelectedReqId] = useState<string>('');
-  const [officerStep, setOfficerStep] = useState<number>(3);
-  const [officerStatus, setOfficerStatus] = useState<MilestoneStatus>('biometrics_or_inspection');
-  const [officerStatusLabel, setOfficerStatusLabel] = useState<string>('');
-  const [officerNotes, setOfficerNotes] = useState<string>('');
-  const [officerName, setOfficerName] = useState<string>('');
-  const [appointmentSchedule, setAppointmentSchedule] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [selectedReq, setSelectedReq] = useState<AgencyServiceRequest | null>(null);
+  const [processStatus, setProcessStatus] = useState<ProcessStatus>('on_process');
+  const [noteDraft, setNoteDraft] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRef = useRef<ExtensionSession | null>(null);
 
-  // Load Session and Vault on mount
   useEffect(() => {
-    loadInitialData();
+    sessionRef.current = session;
+  }, [session]);
 
-    // Listen for real-time vault updates from background (dispatched by web chat)
+  const flash = useCallback((msg: StatusMsg, ms = 3500) => {
+    setStatusMsg(msg);
+    if (msg) setTimeout(() => setStatusMsg(null), ms);
+  }, []);
+
+  const selectRequest = (req: AgencyServiceRequest | null) => {
+    setSelectedReq(req);
+    setProcessStatus(req?.processStatus || 'on_process');
+    setNoteDraft('');
+  };
+
+  const fetchAgencyRequests = useCallback((q: string) => {
+    setSearching(true);
+    chrome.runtime.sendMessage({ type: 'FETCH_AGENCY_REQUESTS', payload: { q } }, (res) => {
+      setSearching(false);
+      if (res && res.success && Array.isArray(res.data)) {
+        const list: AgencyServiceRequest[] = res.data;
+        setRequests(list);
+        setIsOnline(true);
+        setSelectedReq((prev) => {
+          const keep = prev ? list.find((r) => r.id === prev.id) : undefined;
+          const next = keep ?? list[0] ?? null;
+          if (next && (!prev || prev.id !== next.id)) {
+            setProcessStatus(next.processStatus || 'on_process');
+          }
+          return next;
+        });
+      } else {
+        setIsOnline(false);
+        if (res?.error) flash({ text: res.error, type: 'error' }, 4500);
+      }
+    });
+  }, [flash]);
+
+  const loadVault = useCallback(() => {
+    chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (res) => {
+      if (res && res.vault) {
+        setVault(res.vault);
+        setEditFormData(res.vault);
+        setIsOnline(true);
+      } else {
+        setIsOnline(false);
+      }
+    });
+  }, []);
+
+  const routeForSession = useCallback(
+    (s: ExtensionSession | null) => {
+      if (!s || !s.isAuthenticated) return;
+      if (isAgencyRole(s.userRole)) {
+        fetchAgencyRequests('');
+      } else {
+        loadVault();
+      }
+    },
+    [fetchAgencyRequests, loadVault]
+  );
+
+  // Load session on mount and listen for live updates
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'GET_SESSION' }, (res) => {
+      const s: ExtensionSession | null = res?.session || null;
+      setSession(s);
+      routeForSession(s);
+      setLoading(false);
+    });
+
     const handleRuntimeMsg = (msg: any) => {
       if (msg && msg.type === 'VAULT_UPDATED' && msg.vault) {
         setVault(msg.vault);
         setEditFormData(msg.vault);
         setIsOnline(true);
-        setStatusMsg({ text: '⚡ Live synchronized with GovGuide Chat details!', type: 'success' });
-        setTimeout(() => setStatusMsg(null), 3500);
+        flash({ text: 'Synchronized with GovGuide PH (My Details).', type: 'success' });
+      }
+      if (msg && msg.type === 'SESSION_UPDATED' && msg.session) {
+        const prev = sessionRef.current;
+        const next: ExtensionSession = msg.session;
+        const changedUser =
+          !prev || prev.isAuthenticated !== next.isAuthenticated || prev.userId !== next.userId;
+        setSession(next);
+        if (changedUser) {
+          selectRequest(null);
+          setRequests([]);
+          setVault(null);
+          routeForSession(next);
+        }
       }
     };
     chrome.runtime.onMessage.addListener(handleRuntimeMsg);
-
     return () => {
       chrome.runtime.onMessage.removeListener(handleRuntimeMsg);
     };
-  }, []);
+  }, [flash, routeForSession]);
 
-  const loadInitialData = async () => {
-    try {
-      setLoading(true);
+  // ---------------------------------------------------------------------------
+  // Auth
+  // ---------------------------------------------------------------------------
 
-      // 1. Fetch Session
-      chrome.runtime.sendMessage({ type: 'GET_SESSION' }, (res) => {
-        if (res && res.session) {
-          setSession(res.session);
-          setOfficerName(res.session.officerName || 'Officer M. Gomez');
-          fetchAgencyRequests(res.session.apiBaseUrl);
-        }
-      });
-
-      // 2. Fetch Vault (Background will auto-sync with active session from /api/citizen/details?citizenId=active)
-      chrome.runtime.sendMessage({ type: 'GET_VAULT' }, (res) => {
-        if (res && res.vault) {
-          setVault(res.vault);
-          setEditFormData(res.vault);
-          setIsOnline(true);
-        } else {
-          setIsOnline(false);
-        }
-        setLoading(false);
-      });
-    } catch {
-      setIsOnline(false);
-      setLoading(false);
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError('Please enter your email and password.');
+      return;
     }
-  };
-
-  const fetchAgencyRequests = async (baseUrl: string) => {
-    try {
-      const res = await fetch(`${baseUrl}/api/agency/requests?agencyCode=ALL`);
-      if (!res.ok) throw new Error('Unreachable');
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setRequests(json.data);
-        setIsOnline(true);
-        if (json.data.length > 0 && !selectedReqId) {
-          const first = json.data[0];
-          setSelectedReqId(first.id);
-          setOfficerStep(first.currentStep);
-          setOfficerStatus(first.status);
-          setOfficerStatusLabel(first.statusLabel);
-          setOfficerNotes(first.officerNotes);
-          setAppointmentSchedule(first.appointmentSchedule || '');
+    setLoggingIn(true);
+    chrome.runtime.sendMessage(
+      { type: 'LOGIN', payload: { email: loginEmail.trim(), password: loginPassword } },
+      (res) => {
+        setLoggingIn(false);
+        if (res && res.success && res.session) {
+          setLoginPassword('');
+          setSession(res.session);
+          routeForSession(res.session);
+        } else {
+          setLoginError(res?.error || 'Unable to sign in. Ensure GovGuide PH is running.');
         }
       }
-    } catch {
-      setIsOnline(false);
-    }
+    );
   };
 
-  const handleSelectRequest = (reqId: string) => {
-    setSelectedReqId(reqId);
-    const target = requests.find((r) => r.id === reqId);
-    if (target) {
-      setOfficerStep(target.currentStep);
-      setOfficerStatus(target.status);
-      setOfficerStatusLabel(target.statusLabel);
-      setOfficerNotes(target.officerNotes);
-      setAppointmentSchedule(target.appointmentSchedule || '');
-    }
-  };
-
-  const handleToggleRole = () => {
-    if (!session) return;
-    const newRole = session.userRole === 'agency_admin' ? 'citizen' : 'agency_admin';
-    const newTab = newRole === 'agency_admin' ? 'agency' : 'vault';
-    setSession({ ...session, userRole: newRole });
-    setTab(newTab);
-    chrome.runtime.sendMessage({
-      type: 'SET_SESSION',
-      payload: { userRole: newRole },
+  const handleLogout = () => {
+    chrome.runtime.sendMessage({ type: 'LOGOUT' }, (res) => {
+      setSession(res?.session || null);
+      setVault(null);
+      setRequests([]);
+      selectRequest(null);
+      setIsEditing(false);
     });
   };
+
+  const handleOpenWebLogin = () => {
+    const base = session?.apiBaseUrl || 'http://localhost:3000';
+    chrome.tabs.create({ url: `${base}/login` });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Citizen side
+  // ---------------------------------------------------------------------------
 
   const handleSyncGovGuide = () => {
     setSyncing(true);
@@ -131,37 +197,43 @@ export function App() {
         setVault(res.vault);
         setEditFormData(res.vault);
         setIsOnline(true);
-        setStatusMsg({ text: '✅ In sync with GovGuide PH Chat (My Details)!', type: 'success' });
-        setTimeout(() => setStatusMsg(null), 3500);
+        flash({ text: 'In sync with GovGuide PH (My Details).', type: 'success' });
       } else {
         setIsOnline(false);
-        setStatusMsg({ text: '⚠️ Unable to connect to localhost:3000. Ensure GovGuide PH is running.', type: 'warning' });
-        setTimeout(() => setStatusMsg(null), 4500);
+        flash({ text: 'Unable to connect to GovGuide PH. Ensure the web app is running.', type: 'warning' }, 4500);
       }
     });
   };
 
   const handleAutofillActiveTab = () => {
+    setAutofilling(true);
+    setStatusMsg(null);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs[0] || !tabs[0].id) return;
-      chrome.tabs.sendMessage(tabs[0].id, { type: 'DETECT_FIELDS_REQUEST' }, (response) => {
+      const activeTabId = tabs[0]?.id;
+      if (!activeTabId) {
+        setAutofilling(false);
+        flash({ text: 'No active browser tab found.', type: 'warning' });
+        return;
+      }
+      chrome.tabs.sendMessage(activeTabId, { type: 'DETECT_FIELDS_REQUEST' }, (response) => {
+        if (chrome.runtime.lastError) {
+          setAutofilling(false);
+          flash({ text: 'Please refresh the active government portal page to enable autofill.', type: 'warning' }, 4500);
+          return;
+        }
         if (response && response.summary && response.summary.fields && response.summary.fields.length > 0) {
           const fields = response.summary.fields;
-          chrome.tabs.sendMessage(tabs[0].id!, { type: 'TRIGGER_AUTOFILL', payload: { fields } }, (autofillRes) => {
+          chrome.tabs.sendMessage(activeTabId, { type: 'TRIGGER_AUTOFILL', payload: { fields } }, (autofillRes) => {
+            setAutofilling(false);
             if (autofillRes && autofillRes.success) {
-              setStatusMsg({
-                text: `⚡ Successfully injected ${autofillRes.filledCount} verified fields into active portal!`,
-                type: 'success',
-              });
-              setTimeout(() => setStatusMsg(null), 4000);
+              flash({ text: `Filled ${autofillRes.filledCount} verified fields on the active portal.`, type: 'success' }, 4000);
+            } else {
+              flash({ text: 'Autofill completed.', type: 'success' }, 3500);
             }
           });
         } else {
-          setStatusMsg({
-            text: 'ℹ️ No recognized Philippine government form fields on this active page.',
-            type: 'warning',
-          });
-          setTimeout(() => setStatusMsg(null), 3500);
+          setAutofilling(false);
+          flash({ text: 'No recognized Philippine government form fields on this page.', type: 'warning' }, 4000);
         }
       });
     });
@@ -179,13 +251,13 @@ export function App() {
     setVault(editFormData);
     setIsEditing(false);
 
-    // Save to local extension encrypted vault
+    // Save to local extension vault
     chrome.runtime.sendMessage({
       type: 'SAVE_VAULT',
       payload: { vault: editFormData },
     });
 
-    // Also push back to GovGuide PH web server to keep chat in sync
+    // Also push back to GovGuide PH web server to keep web session in sync
     if (session?.apiBaseUrl) {
       try {
         await fetch(`${session.apiBaseUrl}/api/citizen/details`, {
@@ -198,14 +270,14 @@ export function App() {
               middle_name: editFormData.middleName,
               last_name: editFormData.lastName,
               suffix: editFormData.suffix,
-              display_name: `${editFormData.firstName} ${editFormData.middleName ? editFormData.middleName + ' ' : ''}${editFormData.lastName}`.trim(),
+              display_name: [editFormData.firstName, editFormData.middleName, editFormData.lastName, editFormData.suffix].filter(Boolean).join(' ').trim(),
               gender: editFormData.gender,
               birth_date: editFormData.dateOfBirth,
-              father_name: editFormData.fatherFullName,
+              father_name: editFormData.fatherFullName || [editFormData.fatherFirstName, editFormData.fatherMiddleName, editFormData.fatherLastName].filter(Boolean).join(' ').trim(),
               father_first_name: editFormData.fatherFirstName,
               father_middle_name: editFormData.fatherMiddleName,
               father_last_name: editFormData.fatherLastName,
-              mother_maiden_name: `${editFormData.motherMaidenFirstName} ${editFormData.motherMaidenMiddleName ? editFormData.motherMaidenMiddleName + ' ' : ''}${editFormData.motherMaidenLastName}`.trim(),
+              mother_maiden_name: [editFormData.motherMaidenFirstName, editFormData.motherMaidenMiddleName, editFormData.motherMaidenLastName].filter(Boolean).join(' ').trim(),
               mother_first_name: editFormData.motherMaidenFirstName,
               mother_middle_name: editFormData.motherMaidenMiddleName,
               mother_last_name: editFormData.motherMaidenLastName,
@@ -216,6 +288,7 @@ export function App() {
               tin_number: editFormData.tin,
               sss_number: editFormData.sssNumber,
               pagibig_number: editFormData.pagibigMid,
+              passport_number: editFormData.passportNumber,
               street_address: editFormData.streetHouseNumber,
               barangay: editFormData.barangay,
               city: editFormData.cityMunicipality,
@@ -227,191 +300,405 @@ export function App() {
             },
           }),
         });
-        setStatusMsg({ text: '💾 Details saved & synchronized with GovGuide Chat!', type: 'success' });
-        setTimeout(() => setStatusMsg(null), 3000);
+        flash({ text: 'Details saved and synchronized with GovGuide PH.', type: 'success' }, 3000);
       } catch {
-        setStatusMsg({ text: '💾 Saved to local vault (offline mode).', type: 'warning' });
-        setTimeout(() => setStatusMsg(null), 3000);
+        flash({ text: 'Saved to local vault (offline mode).', type: 'warning' }, 3000);
       }
     }
   };
 
-  const handleCommitStatusUpdate = async () => {
-    if (!selectedReqId) return;
-    setIsUpdating(true);
-    setStatusMsg(null);
+  // ---------------------------------------------------------------------------
+  // Agency side
+  // ---------------------------------------------------------------------------
 
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => fetchAgencyRequests(value), 300);
+  };
+
+  const pushRequestUpdate = (
+    payload: { processStatus?: ProcessStatus; note?: string; appointmentSchedule?: string },
+    onDone: (ok: boolean) => void,
+    successText: string
+  ) => {
+    if (!selectedReq) return;
     chrome.runtime.sendMessage(
       {
         type: 'UPDATE_REQUEST_STATUS',
         payload: {
-          requestId: selectedReqId,
-          currentStep: officerStep,
-          status: officerStatus,
-          statusLabel: officerStatusLabel || getStepDefaultLabel(officerStep),
-          officerNotes,
-          officerName: officerName || 'Officer M. Gomez',
-          appointmentSchedule,
+          requestId: selectedReq.id,
+          officerName: session?.fullName,
+          ...payload,
         },
       },
       (res) => {
-        setIsUpdating(false);
-        if (res && res.success) {
-          setStatusMsg({
-            text: `🚀 Status Bar updated & citizen notified for ${selectedReqId}!`,
-            type: 'success',
-          });
-          if (session) fetchAgencyRequests(session.apiBaseUrl);
-          setTimeout(() => setStatusMsg(null), 4000);
+        if (res && res.success && res.data) {
+          const updated: AgencyServiceRequest = res.data;
+          setSelectedReq(updated);
+          setProcessStatus(updated.processStatus);
+          setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+          flash({ text: successText, type: 'success' }, 4000);
+          onDone(true);
         } else {
-          setStatusMsg({
-            text: `❌ Error: ${res?.error || 'Failed to update status bar'}`,
-            type: 'error',
-          });
-          setTimeout(() => setStatusMsg(null), 4000);
+          flash({ text: `Error: ${res?.error || 'Failed to update request'}`, type: 'error' }, 4500);
+          onDone(false);
         }
       }
     );
   };
 
-  const getStepDefaultLabel = (step: number): string => {
-    switch (step) {
-      case 1: return 'Application Submitted & Logged';
-      case 2: return 'Documents Verified by Reviewing Officer';
-      case 3: return 'Biometrics / Counter Window Scheduled';
-      case 4: return 'Under Processing & Production';
-      case 5: return 'Ready for Release & Counter Pick-Up';
-      default: return 'In Progress';
-    }
+  const handleAddNote = () => {
+    if (!selectedReq || !noteDraft.trim()) return;
+    setIsAddingNote(true);
+    pushRequestUpdate(
+      { note: noteDraft.trim() },
+      (ok) => {
+        setIsAddingNote(false);
+        if (ok) setNoteDraft('');
+      },
+      `Note added to ${selectedReq.id}.`
+    );
+  };
+
+  const handleProceed = () => {
+    if (!selectedReq) return;
+    setIsUpdating(true);
+    pushRequestUpdate(
+      {
+        processStatus,
+        note: noteDraft.trim() || undefined,
+      },
+      (ok) => {
+        setIsUpdating(false);
+        if (ok) setNoteDraft('');
+      },
+      `${selectedReq.id} set to ${processLabel(processStatus)}. Citizen notified.`
+    );
   };
 
   const getInitials = (v: CitizenVaultData): string => {
-    const f = (v.firstName || 'J')[0];
-    const l = (v.lastName || 'C')[0];
-    return `${f}${l}`.toUpperCase();
+    const f = (v.firstName || '')[0];
+    const l = (v.lastName || '')[0];
+    return (f && l ? `${f}${l}` : (v.firstName || v.lastName || 'CA').slice(0, 2)).toUpperCase();
   };
+
+  const formatNoteTime = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat('en-PH', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(iso));
+    } catch {
+      return iso;
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   if (loading) {
     return (
       <div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-        <div className="spin-icon" style={{ fontSize: 24, marginBottom: 8 }}>🔄</div>
-        <p style={{ fontSize: 13, fontWeight: 600 }}>Loading GovGuide PH Copilot...</p>
+        <div className="spinner" style={{ margin: '0 auto 10px' }} />
+        <p style={{ fontSize: 13, fontWeight: 600 }}>Loading GovGuide PH...</p>
       </div>
     );
   }
 
-  const isAgency = session?.userRole === 'agency_admin';
+  const isAuthed = !!session?.isAuthenticated;
+  const isAgency = isAuthed && isAgencyRole(session?.userRole);
 
-  return (
-    <div className="popup-container">
-      {/* 1. Header */}
-      <header className="popup-header">
-        <div className="brand-section">
-          <span className="brand-flag">🇵🇭</span>
-          <div className="brand-titles">
-            <div className="brand-name">
-              <span>GovGuide PH</span>
-              <span className="brand-badge">Bilis-Pila</span>
-            </div>
-            <span className="brand-subtitle">Civic Copilot &amp; Counter Bridge</span>
+  const header = (
+    <header className="popup-header">
+      <div className="brand-section">
+        <img src="icons/logo.png" alt="GovGuide PH" className="brand-logo" />
+        <div className="brand-titles">
+          <div className="brand-name">
+            <span>GovGuide PH</span>
+            <span className="brand-badge">Bilis-Pila</span>
           </div>
+          {isAgency && <span className="brand-subtitle">Agency Counter Bridge</span>}
         </div>
-
-        {/* Role Toggle Pill Button */}
-        <button
-          onClick={handleToggleRole}
-          className={`role-pill-btn ${isAgency ? 'agency' : 'citizen'}`}
-          title="Switch between Citizen Autofill and Agency Officer Mode"
-        >
-          <span>{isAgency ? '🏢 Officer Mode' : '👤 Citizen Mode'}</span>
-          <span style={{ opacity: 0.8, fontSize: 10 }}>⇄</span>
-        </button>
-      </header>
-
-      {/* 2. Sync Status Subheader */}
-      <div className="sync-status-bar">
-        <div className={`sync-indicator ${isOnline ? 'connected' : 'offline'}`}>
-          <span className={`pulse-dot ${isOnline ? 'online' : 'offline'}`} />
-          <span>{isOnline ? 'Connected to GovGuide Chat' : 'Offline / Standalone Vault'}</span>
-        </div>
-
-        {vault && (
-          <div className="active-profile-chip" title="Active synced citizen profile">
-            <span>👤</span>
-            <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {vault.firstName} {vault.lastName}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* 3. Global Notification Banner */}
-      {statusMsg && (
-        <div className={`notification-banner ${statusMsg.type}`}>
-          <span>{statusMsg.text}</span>
-          <button
-            onClick={() => setStatusMsg(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.7 }}
-          >
-            ✕
+      {isAuthed && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className={`role-pill-btn ${isAgency ? 'agency' : 'citizen'}`} style={{ cursor: 'default' }}>
+            {isAgency ? `Agency${session?.agencyCode ? ` · ${session.agencyCode}` : ''}` : 'Citizen'}
+          </span>
+          <button onClick={handleLogout} className="signout-btn" title="Sign out">
+            Sign out
           </button>
         </div>
       )}
+    </header>
+  );
 
-      {/* 4. Tab Navigation */}
-      <nav className="nav-tab-bar">
-        <button
-          onClick={() => setTab('vault')}
-          className={`tab-btn ${tab === 'vault' ? 'active' : ''}`}
-        >
-          <span>🔐</span>
-          <span>My Details</span>
-        </button>
+  const banner = statusMsg && (
+    <div className={`notification-banner ${statusMsg.type}`}>
+      <span>{statusMsg.text}</span>
+      <button
+        onClick={() => setStatusMsg(null)}
+        aria-label="Dismiss"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.7 }}
+      >
+        ×
+      </button>
+    </div>
+  );
 
-        <button
-          onClick={() => setTab('tracker')}
-          className={`tab-btn ${tab === 'tracker' ? 'active' : ''}`}
-        >
-          <span>📊</span>
-          <span>Applications</span>
-          {requests.length > 0 && <span className="tab-badge">{requests.length}</span>}
-        </button>
+  // LOGIN SCREEN
+  if (!isAuthed) {
+    return (
+      <div className="popup-container">
+        {header}
+        <div className="tab-content" style={{ justifyContent: 'center' }}>
+          <form className="vault-card login-card" onSubmit={handleLogin}>
+            <div className="login-title">Sign in</div>
+            <div className="login-subtitle">Use your GovGuide PH citizen or agency account.</div>
 
-        {isAgency && (
-          <button
-            onClick={() => setTab('agency')}
-            className={`tab-btn agency-tab ${tab === 'agency' ? 'active agency-tab' : ''}`}
-          >
-            <span>🏢</span>
-            <span>Officer Stepper</span>
-          </button>
-        )}
-      </nav>
+            <div className="form-group" style={{ marginTop: 12 }}>
+              <label className="form-label" htmlFor="login-email">Email</label>
+              <input
+                id="login-email"
+                type="email"
+                className="form-input"
+                autoComplete="username"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+            <div className="form-group" style={{ marginTop: 8 }}>
+              <label className="form-label" htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                className="form-input"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+              />
+            </div>
 
-      {/* 5. Tab Content Body */}
+            {loginError && <div className="login-error">{loginError}</div>}
+
+            <button type="submit" className="btn-autofill" disabled={loggingIn} style={{ width: '100%', marginTop: 14 }}>
+              {loggingIn ? 'Signing in...' : 'Sign in'}
+            </button>
+
+            <div className="login-divider"><span>or</span></div>
+
+            <button type="button" className="btn-sync" onClick={handleOpenWebLogin} style={{ width: '100%' }}>
+              Sign in on GovGuide PH web portal
+            </button>
+            <p className="login-hint">
+              Keep GovGuide PH open in your browser tab to synchronize your details automatically.
+            </p>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // AGENCY SIDE
+  if (isAgency) {
+    return (
+      <div className="popup-container">
+        {header}
+
+        <div className="sync-status-bar">
+          <div className="active-profile-chip" title={session?.email}>
+            <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {session?.fullName || session?.email}
+            </span>
+          </div>
+        </div>
+
+        {banner}
+
+        <div className="tab-content">
+          {/* Search */}
+          <div className="vault-card">
+            <label className="form-label" htmlFor="agency-search" style={{ display: 'block', marginBottom: 6, fontSize: 11 }}>
+              Search Citizen Applications
+            </label>
+            <div className="search-wrap">
+              <input
+                id="agency-search"
+                type="search"
+                className="form-input search-input"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Reference no., request ID, citizen name, email or phone"
+                autoFocus
+              />
+              {searching && <span className="spinner spinner-sm search-spinner" />}
+            </div>
+
+            <div className="request-results">
+              {requests.length === 0 && !searching ? (
+                <div className="empty-results">
+                  {searchQuery ? `No applications match "${searchQuery}".` : 'No applications found for your agency.'}
+                </div>
+              ) : (
+                requests.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => selectRequest(r)}
+                    className={`request-row ${selectedReq?.id === r.id ? 'selected' : ''}`}
+                  >
+                    <div className="request-row-top">
+                      <span className="agency-code-chip">{r.agencyCode}</span>
+                      <span className="request-ref">{r.referenceNumber}</span>
+                      <span className={`process-pill ${r.processStatus}`}>{processLabel(r.processStatus)}</span>
+                    </div>
+                    <div className="request-row-name">{r.citizenName}</div>
+                    <div className="request-row-service">{r.serviceTitle}</div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Selected request */}
+          {selectedReq && (
+            <div className="vault-card">
+              <div className="card-header-row" style={{ alignItems: 'flex-start' }}>
+                <div>
+                  <div className="card-title-name">{selectedReq.citizenName}</div>
+                  <div className="card-title-sub">
+                    {selectedReq.serviceTitle} · Ref {selectedReq.referenceNumber}
+                  </div>
+                </div>
+                <span className={`process-pill ${selectedReq.processStatus}`}>{processLabel(selectedReq.processStatus)}</span>
+              </div>
+
+              {/* Status bar */}
+              <span className="section-label">Status</span>
+              <div className="status-bar" role="radiogroup" aria-label="Application status">
+                {PROCESS_STATUS_OPTIONS.map((opt, i) => {
+                  const activeIdx = PROCESS_STATUS_OPTIONS.findIndex((o) => o.value === processStatus);
+                  const isActive = opt.value === processStatus;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={isActive}
+                      onClick={() => setProcessStatus(opt.value)}
+                      className={`status-seg ${opt.value} ${isActive ? 'active' : ''} ${
+                        processStatus === 'complete' && i < activeIdx ? 'passed' : ''
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Notes */}
+              <span className="section-label" style={{ marginTop: 12 }}>Notes</span>
+              {selectedReq.notes && selectedReq.notes.length > 0 ? (
+                <div className="notes-list">
+                  {[...selectedReq.notes].reverse().map((n) => (
+                    <div key={n.id} className="note-item">
+                      <div className="note-meta">
+                        <span>{n.author}</span>
+                        <span>{formatNoteTime(n.createdAt)}</span>
+                      </div>
+                      <div className="note-text">{n.text}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-results" style={{ padding: '6px 0' }}>No notes yet.</div>
+              )}
+
+              <textarea
+                rows={2}
+                className="form-input"
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder="Write a note for this application..."
+                style={{ marginTop: 6, resize: 'vertical' }}
+              />
+              <button
+                type="button"
+                onClick={handleAddNote}
+                disabled={isAddingNote || !noteDraft.trim()}
+                className="btn-sync"
+                style={{ width: '100%', marginTop: 6 }}
+              >
+                {isAddingNote ? 'Adding...' : 'Add Note'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleProceed}
+                disabled={isUpdating}
+                className="btn-autofill btn-proceed"
+                style={{ width: '100%', marginTop: 12 }}
+              >
+                {isUpdating ? 'Saving...' : 'Proceed'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // CITIZEN SIDE
+  return (
+    <div className="popup-container">
+      {header}
+
+      <div className="sync-status-bar">
+        <div className="active-profile-chip" title="Active citizen profile">
+          <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {vault && (vault.firstName || vault.lastName)
+              ? `${vault.firstName} ${vault.lastName}`.trim()
+              : (session?.fullName || 'Citizen Profile')}
+          </span>
+        </div>
+      </div>
+
+      {banner}
+
       <div className="tab-content">
-        {/* TAB 1: MY DETAILS & CITIZEN VAULT */}
-        {tab === 'vault' && vault && (
+        {!vault ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+            <div className="spinner" style={{ margin: '0 auto 10px' }} />
+            <p style={{ fontSize: 12, fontWeight: 600 }}>Loading your details...</p>
+          </div>
+        ) : (
           <>
             {/* Action Row */}
             <div className="action-banner-row">
               <button
                 onClick={handleAutofillActiveTab}
+                disabled={autofilling}
                 className="btn-autofill"
                 title="Detect & autofill fields on active browser tab (PSA, DFA, NBI)"
               >
-                <span>⚡</span>
-                <span>Autofill Active Portal</span>
+                {autofilling && <span className="spinner spinner-sm" />}
+                <span>{autofilling ? 'Filling Fields...' : 'Autofill Form'}</span>
               </button>
 
               <button
                 onClick={handleSyncGovGuide}
-                disabled={syncing}
+                disabled={syncing || autofilling}
                 className="btn-sync"
-                title="Fetch latest details learned in the main web chat"
+                title="Fetch latest details from GovGuide PH"
               >
-                <span className={syncing ? 'spin-icon' : ''}>🔄</span>
-                <span>{syncing ? 'Syncing...' : 'Sync from Chat'}</span>
+                {syncing && <span className="spinner spinner-sm" />}
+                <span>{syncing ? 'Syncing...' : 'Sync from My Details'}</span>
               </button>
             </div>
 
@@ -419,34 +706,28 @@ export function App() {
             <div className="vault-card">
               <div className="card-header-row">
                 <div className="card-header-left">
-                  <div className="avatar-initials">
-                    {getInitials(vault)}
-                  </div>
+                  <div className="avatar-initials">{getInitials(vault)}</div>
                   <div>
                     <div className="card-title-name">
-                      {vault.firstName} {vault.middleName ? vault.middleName + ' ' : ''}{vault.lastName} {vault.suffix || ''}
+                      {[vault.firstName, vault.middleName, vault.lastName, vault.suffix].filter(Boolean).join(' ') || 'Citizen Applicant'}
                     </div>
                     <div className="card-title-sub">
-                      {vault.civilStatus} · {vault.gender} · Born {vault.dateOfBirth}
+                      {[vault.civilStatus, vault.gender, vault.dateOfBirth ? `Born ${vault.dateOfBirth}` : ''].filter(Boolean).join(' · ')}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="security-badge">RA 10173 Encrypted</span>
-                  <button
-                    onClick={() => {
-                      setIsEditing(!isEditing);
-                      setEditFormData(vault);
-                    }}
-                    className={`edit-toggle-btn ${isEditing ? 'active' : ''}`}
-                  >
-                    <span>{isEditing ? '✕ Cancel' : '✏️ Edit'}</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    setIsEditing(!isEditing);
+                    setEditFormData(vault);
+                  }}
+                  className={`edit-toggle-btn ${isEditing ? 'active' : ''}`}
+                >
+                  <span>{isEditing ? 'Cancel' : 'Edit'}</span>
+                </button>
               </div>
 
-              {/* View Mode vs Edit Mode */}
               {!isEditing ? (
                 <>
                   {/* Identity Grid */}
@@ -464,14 +745,13 @@ export function App() {
                   {/* Civil Registry & Parents Section (PSA & NBI Essential) */}
                   <div className="detail-group">
                     <div className="group-title">
-                      <span>🏛️</span>
                       <span>Civil Registry &amp; Parents (PSA / NBI Essential)</span>
                     </div>
                     <div className="info-grid">
                       <div className="info-item info-col-span">
                         <span className="info-label">Mother&apos;s Maiden Name (Crucial for PSA Birth Certificate)</span>
                         <span className="info-val highlight">
-                          {vault.motherMaidenFirstName} {vault.motherMaidenMiddleName} {vault.motherMaidenLastName} {vault.motherMaidenSuffix}
+                          {[vault.motherMaidenFirstName, vault.motherMaidenMiddleName, vault.motherMaidenLastName, vault.motherMaidenSuffix].filter(Boolean).join(' ') || 'Not specified'}
                         </span>
                         <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
                           First: {vault.motherMaidenFirstName || '—'} · Mid: {vault.motherMaidenMiddleName || '—'} · Last: {vault.motherMaidenLastName || '—'}
@@ -481,7 +761,7 @@ export function App() {
                       <div className="info-item info-col-span">
                         <span className="info-label">Father&apos;s Full Name</span>
                         <span className="info-val">
-                          {vault.fatherFirstName || ''} {vault.fatherMiddleName || ''} {vault.fatherLastName || ''} {vault.fatherSuffix || ''}
+                          {[vault.fatherFirstName, vault.fatherMiddleName, vault.fatherLastName, vault.fatherSuffix].filter(Boolean).join(' ') || vault.fatherFullName || 'Not specified'}
                         </span>
                         <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
                           First: {vault.fatherFirstName || '—'} · Mid: {vault.fatherMiddleName || '—'} · Last: {vault.fatherLastName || '—'}
@@ -493,118 +773,39 @@ export function App() {
                   {/* Philippine Government IDs (with 1-Click Copy Chips) */}
                   <div className="detail-group">
                     <div className="group-title">
-                      <span>🇵🇭</span>
                       <span>Government Identifiers (1-Click Copy)</span>
                     </div>
                     <div className="id-chips-grid">
-                      {/* PhilSys */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">PhilSys National ID</div>
-                          <div className="id-card-val">{vault.philsysId || '—'}</div>
+                      {[
+                        { key: 'philsys', label: 'PhilSys National ID', val: vault.philsysId },
+                        { key: 'philhealth', label: 'PhilHealth PIN', val: vault.philhealthNumber },
+                        { key: 'tin', label: 'BIR TIN', val: vault.tin },
+                        { key: 'sss', label: 'SSS Number / CRN', val: vault.sssNumber },
+                        { key: 'pagibig', label: 'Pag-IBIG MID', val: vault.pagibigMid },
+                        { key: 'passport', label: 'DFA Passport No.', val: vault.passportNumber },
+                      ].map((id) => (
+                        <div key={id.key} className="id-card-item">
+                          <div className="id-card-text">
+                            <div className="id-card-label">{id.label}</div>
+                            <div className="id-card-val">{id.val || '—'}</div>
+                          </div>
+                          {id.val && (
+                            <button
+                              onClick={() => handleCopyText(id.key, id.val)}
+                              className={`copy-mini-btn ${copiedKey === id.key ? 'copied' : ''}`}
+                              title={`Copy ${id.label}`}
+                            >
+                              {copiedKey === id.key ? 'Copied' : 'Copy'}
+                            </button>
+                          )}
                         </div>
-                        {vault.philsysId && (
-                          <button
-                            onClick={() => handleCopyText('philsys', vault.philsysId)}
-                            className={`copy-mini-btn ${copiedKey === 'philsys' ? 'copied' : ''}`}
-                            title="Copy PhilSys ID"
-                          >
-                            {copiedKey === 'philsys' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* PhilHealth */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">PhilHealth PIN</div>
-                          <div className="id-card-val">{vault.philhealthNumber || '—'}</div>
-                        </div>
-                        {vault.philhealthNumber && (
-                          <button
-                            onClick={() => handleCopyText('philhealth', vault.philhealthNumber)}
-                            className={`copy-mini-btn ${copiedKey === 'philhealth' ? 'copied' : ''}`}
-                            title="Copy PhilHealth PIN"
-                          >
-                            {copiedKey === 'philhealth' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* BIR TIN */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">BIR TIN</div>
-                          <div className="id-card-val">{vault.tin || '—'}</div>
-                        </div>
-                        {vault.tin && (
-                          <button
-                            onClick={() => handleCopyText('tin', vault.tin)}
-                            className={`copy-mini-btn ${copiedKey === 'tin' ? 'copied' : ''}`}
-                            title="Copy BIR TIN"
-                          >
-                            {copiedKey === 'tin' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* SSS Number */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">SSS Number / CRN</div>
-                          <div className="id-card-val">{vault.sssNumber || '—'}</div>
-                        </div>
-                        {vault.sssNumber && (
-                          <button
-                            onClick={() => handleCopyText('sss', vault.sssNumber)}
-                            className={`copy-mini-btn ${copiedKey === 'sss' ? 'copied' : ''}`}
-                            title="Copy SSS Number"
-                          >
-                            {copiedKey === 'sss' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Pag-IBIG MID */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">Pag-IBIG MID</div>
-                          <div className="id-card-val">{vault.pagibigMid || '—'}</div>
-                        </div>
-                        {vault.pagibigMid && (
-                          <button
-                            onClick={() => handleCopyText('pagibig', vault.pagibigMid)}
-                            className={`copy-mini-btn ${copiedKey === 'pagibig' ? 'copied' : ''}`}
-                            title="Copy Pag-IBIG MID"
-                          >
-                            {copiedKey === 'pagibig' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* DFA Passport */}
-                      <div className="id-card-item">
-                        <div className="id-card-text">
-                          <div className="id-card-label">DFA Passport No.</div>
-                          <div className="id-card-val">{vault.passportNumber || '—'}</div>
-                        </div>
-                        {vault.passportNumber && (
-                          <button
-                            onClick={() => handleCopyText('passport', vault.passportNumber)}
-                            className={`copy-mini-btn ${copiedKey === 'passport' ? 'copied' : ''}`}
-                            title="Copy Passport Number"
-                          >
-                            {copiedKey === 'passport' ? '✓ Copied' : '📋 Copy'}
-                          </button>
-                        )}
-                      </div>
+                      ))}
                     </div>
                   </div>
 
                   {/* Contact & Address Section */}
                   <div className="detail-group">
                     <div className="group-title">
-                      <span>📍</span>
                       <span>Contact &amp; Philippine Delivery Address</span>
                     </div>
                     <div className="info-grid">
@@ -630,172 +831,42 @@ export function App() {
                 editFormData && (
                   <div style={{ marginTop: 10 }}>
                     <div className="edit-form-grid">
-                      <div className="form-group">
-                        <label className="form-label">First Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.firstName}
-                          onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Middle Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.middleName}
-                          onChange={(e) => setEditFormData({ ...editFormData, middleName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Last Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.lastName}
-                          onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Date of Birth (YYYY-MM-DD)</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.dateOfBirth}
-                          onChange={(e) => setEditFormData({ ...editFormData, dateOfBirth: e.target.value })}
-                        />
-                      </div>
-
-                      {/* Mother's Maiden Name */}
-                      <div className="form-group col-span-2">
-                        <label className="form-label">Mother&apos;s Maiden First Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.motherMaidenFirstName}
-                          onChange={(e) => setEditFormData({ ...editFormData, motherMaidenFirstName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Mother&apos;s Maiden Middle</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.motherMaidenMiddleName}
-                          onChange={(e) => setEditFormData({ ...editFormData, motherMaidenMiddleName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Mother&apos;s Maiden Last</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.motherMaidenLastName}
-                          onChange={(e) => setEditFormData({ ...editFormData, motherMaidenLastName: e.target.value })}
-                        />
-                      </div>
-
-                      {/* Father's Name */}
-                      <div className="form-group">
-                        <label className="form-label">Father&apos;s First Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.fatherFirstName || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, fatherFirstName: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Father&apos;s Last Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.fatherLastName || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, fatherLastName: e.target.value })}
-                        />
-                      </div>
-
-                      {/* IDs */}
-                      <div className="form-group">
-                        <label className="form-label">PhilSys National ID</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.philsysId || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, philsysId: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">PhilHealth PIN</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.philhealthNumber || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, philhealthNumber: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">BIR TIN</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.tin || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, tin: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">SSS Number</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.sssNumber || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, sssNumber: e.target.value })}
-                        />
-                      </div>
-
-                      {/* Contact & Address */}
-                      <div className="form-group col-span-2">
-                        <label className="form-label">Mobile Number</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.mobileNumber}
-                          onChange={(e) => setEditFormData({ ...editFormData, mobileNumber: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group col-span-2">
-                        <label className="form-label">Street / Unit / House No.</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.streetHouseNumber}
-                          onChange={(e) => setEditFormData({ ...editFormData, streetHouseNumber: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Barangay</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.barangay}
-                          onChange={(e) => setEditFormData({ ...editFormData, barangay: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">City / Municipality</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editFormData.cityMunicipality}
-                          onChange={(e) => setEditFormData({ ...editFormData, cityMunicipality: e.target.value })}
-                        />
-                      </div>
+                      {(
+                        [
+                          { field: 'firstName', label: 'First Name' },
+                          { field: 'middleName', label: 'Middle Name' },
+                          { field: 'lastName', label: 'Last Name' },
+                          { field: 'dateOfBirth', label: 'Date of Birth (YYYY-MM-DD)' },
+                          { field: 'motherMaidenFirstName', label: "Mother's Maiden First Name", span: true },
+                          { field: 'motherMaidenMiddleName', label: "Mother's Maiden Middle" },
+                          { field: 'motherMaidenLastName', label: "Mother's Maiden Last" },
+                          { field: 'fatherFirstName', label: "Father's First Name" },
+                          { field: 'fatherLastName', label: "Father's Last Name" },
+                          { field: 'philsysId', label: 'PhilSys National ID' },
+                          { field: 'philhealthNumber', label: 'PhilHealth PIN' },
+                          { field: 'tin', label: 'BIR TIN' },
+                          { field: 'sssNumber', label: 'SSS Number' },
+                          { field: 'mobileNumber', label: 'Mobile Number', span: true },
+                          { field: 'streetHouseNumber', label: 'Street / Unit / House No.', span: true },
+                          { field: 'barangay', label: 'Barangay' },
+                          { field: 'cityMunicipality', label: 'City / Municipality' },
+                        ] as { field: keyof CitizenVaultData; label: string; span?: boolean }[]
+                      ).map(({ field, label, span }) => (
+                        <div key={field} className={`form-group ${span ? 'col-span-2' : ''}`}>
+                          <label className="form-label">{label}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={(editFormData[field] as string) || ''}
+                            onChange={(e) => setEditFormData({ ...editFormData, [field]: e.target.value })}
+                          />
+                        </div>
+                      ))}
                     </div>
 
                     <div className="edit-action-bar">
                       <button onClick={handleSaveEditForm} className="btn-save">
-                        💾 Save &amp; Sync to Chat
+                        Save &amp; Sync Details
                       </button>
                       <button onClick={() => setIsEditing(false)} className="btn-cancel">
                         Cancel
@@ -807,201 +878,7 @@ export function App() {
             </div>
           </>
         )}
-
-        {/* TAB 2: APPLICATION TRACKER */}
-        {tab === 'tracker' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {requests.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
-                <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>📋</span>
-                <p style={{ fontSize: 13, fontWeight: 600 }}>No active agency service requests.</p>
-                <p style={{ fontSize: 11, marginTop: 4 }}>Apply for DFA Passport, PSA Birth Certificate, or NBI Clearance in the web app.</p>
-              </div>
-            ) : (
-              requests.map((req) => (
-                <div key={req.id} className="vault-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#2563eb', background: '#eff6ff', padding: '2px 7px', borderRadius: 4 }}>
-                      {req.agencyCode}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', fontFamily: 'monospace' }}>
-                      Ref #{req.referenceNumber}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 5 }}>
-                    {req.serviceTitle}
-                  </div>
-
-                  {/* 5-Step Stepper Bar */}
-                  <div style={{ margin: '10px 0 6px 0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a' }}>
-                        Step {req.currentStep} of {req.totalSteps}: {req.statusLabel}
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: req.currentStep === 5 ? '#10b981' : '#2563eb' }}>
-                        {Math.round((req.currentStep / req.totalSteps) * 100)}%
-                      </span>
-                    </div>
-
-                    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${(req.currentStep / req.totalSteps) * 100}%`,
-                          background: req.currentStep === 5 ? '#10b981' : '#2563eb',
-                          borderRadius: 3,
-                          transition: 'width 0.3s ease',
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {req.officerNotes && (
-                    <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: 6, fontSize: 11, color: '#334155', marginTop: 8, borderLeft: '3px solid #2563eb' }}>
-                      <strong>Officer Directive:</strong> {req.officerNotes}
-                    </div>
-                  )}
-
-                  {req.appointmentSchedule && (
-                    <div style={{ fontSize: 11, color: '#047857', fontWeight: 600, marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>🗓️</span>
-                      <span><strong>Counter Window:</strong> {req.appointmentSchedule}</span>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: AGENCY OFFICER STEPPER */}
-        {tab === 'agency' && isAgency && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="vault-card">
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                Select Citizen Application to Advance
-              </label>
-              <select
-                value={selectedReqId}
-                onChange={(e) => handleSelectRequest(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #cbd5e1',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: '#ffffff',
-                }}
-              >
-                {requests.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    [{r.agencyCode}] {r.referenceNumber} — {r.citizenName}
-                  </option>
-                ))}
-              </select>
-
-              <div style={{ marginTop: 14 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: 8 }}>
-                  Advance Application Milestone (Click Step):
-                </span>
-
-                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-                  {[1, 2, 3, 4, 5].map((stepNum) => {
-                    const isActive = officerStep === stepNum;
-                    const isPassed = officerStep > stepNum;
-                    return (
-                      <button
-                        key={stepNum}
-                        onClick={() => {
-                          setOfficerStep(stepNum);
-                          setOfficerStatusLabel(getStepDefaultLabel(stepNum));
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '8px 2px',
-                          borderRadius: 6,
-                          border: 'none',
-                          background: isActive ? '#f59e0b' : isPassed ? '#10b981' : '#f1f5f9',
-                          color: isActive || isPassed ? '#ffffff' : '#64748b',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        Step {stepNum}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <label style={{ fontSize: 10.5, color: '#64748b', display: 'block', marginBottom: 3 }}>
-                      Status Label (Visible to Citizen)
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={officerStatusLabel}
-                      onChange={(e) => setOfficerStatusLabel(e.target.value)}
-                      placeholder={getStepDefaultLabel(officerStep)}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 10.5, color: '#64748b', display: 'block', marginBottom: 3 }}>
-                      Counter Officer Directive / Notes
-                    </label>
-                    <textarea
-                      rows={2}
-                      className="form-input"
-                      value={officerNotes}
-                      onChange={(e) => setOfficerNotes(e.target.value)}
-                      placeholder="e.g. Please bring 2 original valid IDs and PSA Birth Certificate to Window 4."
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 10.5, color: '#64748b', display: 'block', marginBottom: 3 }}>
-                      Scheduled Counter Date &amp; Time
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={appointmentSchedule}
-                      onChange={(e) => setAppointmentSchedule(e.target.value)}
-                      placeholder="e.g. Nov 5, 2026 at 09:30 AM (Window 4)"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleCommitStatusUpdate}
-                  disabled={isUpdating}
-                  className="btn-autofill"
-                  style={{
-                    width: '100%',
-                    marginTop: 12,
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                    boxShadow: '0 2px 4px rgba(245, 158, 11, 0.25)',
-                  }}
-                >
-                  <span>{isUpdating ? 'Pushing Update...' : '🚀 Advance Citizen Milestone Status'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* 6. Footer Compliance */}
-      <footer className="compliance-footer">
-        <span>🔒</span>
-        <span>Protected under RA 10173 (Data Privacy Act of 2012) • AES-256 Encrypted Local Vault</span>
-      </footer>
     </div>
   );
 }

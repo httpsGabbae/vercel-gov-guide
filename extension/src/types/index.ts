@@ -47,9 +47,15 @@ export interface CitizenVaultData {
   philhealthNumber?: string; // PhilHealth PIN
   pagibigMid?: string; // Pag-IBIG Member ID
   passportNumber?: string; // DFA Passport Number
+  relationshipToOwner?: string; // Default 'Self' for civil registry requests
 }
 
-export type FieldKey = keyof CitizenVaultData | 'fullName' | 'motherMaidenFullName' | 'fullAddress';
+export type FieldKey =
+  | keyof CitizenVaultData
+  | 'fullName'
+  | 'motherMaidenFullName'
+  | 'fullAddress'
+  | 'relationshipToOwner';
 
 export interface DetectedField {
   id: string;
@@ -89,6 +95,15 @@ export interface MilestoneStep {
   completedAt?: string;
 }
 
+export type ProcessStatus = 'on_process' | 'missing_details' | 'complete';
+
+export interface RequestNote {
+  id: string;
+  text: string;
+  author: string;
+  createdAt: string;
+}
+
 export interface AgencyServiceRequest {
   id: string;
   referenceNumber: string;
@@ -105,6 +120,8 @@ export interface AgencyServiceRequest {
   totalSteps: number; // 5
   status: MilestoneStatus;
   statusLabel: string;
+  processStatus: ProcessStatus;
+  notes: RequestNote[];
   statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'purple' | 'rose' | 'slate';
   officerName: string;
   officerRole: string;
@@ -117,10 +134,20 @@ export interface AgencyServiceRequest {
   steps: MilestoneStep[];
 }
 
-export type UserRole = 'citizen' | 'agency_admin' | 'guest';
+export type UserRole = 'citizen' | 'agency_admin' | 'platform_admin' | 'guest';
 
 export interface ExtensionSession {
   userRole: UserRole;
+  isAuthenticated: boolean;
+  /** 'extension' = signed in via popup; 'web' = mirrored from the GovGuide web chat session */
+  authSource?: 'extension' | 'web';
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  userId?: string;
+  email?: string;
+  fullName?: string;
+  agencyName?: string;
   citizenId?: string;
   officerName?: string;
   agencyCode?: string;
@@ -134,20 +161,22 @@ export type ExtensionMessage =
   | { type: 'GET_VAULT' }
   | { type: 'SAVE_VAULT'; payload: { vault: CitizenVaultData; pin?: string } }
   | { type: 'SYNC_FROM_GOVGUIDE'; payload?: { citizenId?: string } }
-  | { type: 'PUSH_VAULT_FROM_WEB'; payload: { applicant: any; citizenId?: string } }
+  | { type: 'PUSH_VAULT_FROM_WEB'; payload: { applicant: any; citizenId?: string; apiBaseUrl?: string } }
   | { type: 'VAULT_UPDATED'; vault: CitizenVaultData }
   | { type: 'GET_SESSION' }
   | { type: 'SET_SESSION'; payload: Partial<ExtensionSession> }
   | { type: 'TRIGGER_AUTOFILL'; payload: { fields: DetectedField[] } }
+  | { type: 'LOGIN'; payload: { email: string; password: string } }
+  | { type: 'LOGOUT' }
+  | { type: 'SYNC_WEB_AUTH'; payload: { accessToken?: string; refreshToken?: string; signedOut?: boolean } }
+  | { type: 'SESSION_UPDATED'; session: ExtensionSession }
+  | { type: 'FETCH_AGENCY_REQUESTS'; payload?: { q?: string } }
   | { type: 'UPDATE_REQUEST_STATUS'; payload: {
       requestId: string;
-      currentStep: number;
-      status: MilestoneStatus;
-      statusLabel: string;
-      officerNotes: string;
-      officerName: string;
+      processStatus?: ProcessStatus;
+      officerName?: string;
+      note?: string;
       appointmentSchedule?: string;
-      actionRequiredNotice?: string;
     } }
   | { type: 'DETECT_FIELDS_REQUEST' }
   | { type: 'FIELDS_DETECTED'; payload: DetectionSummary }

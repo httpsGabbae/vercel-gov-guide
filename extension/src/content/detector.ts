@@ -5,6 +5,57 @@
 
 import type { CitizenVaultData, DetectedField, DetectionSummary, FieldKey } from '../types';
 
+
+export function getRadioButtonOptionText(el: HTMLInputElement): string {
+  const parts: string[] = [];
+  if (el.value) parts.push(el.value);
+  if (el.id) {
+    try {
+      const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+      if (lbl && lbl.textContent) parts.push(lbl.textContent.trim());
+    } catch {}
+  }
+  const parentLbl = el.closest('label');
+  if (parentLbl && parentLbl.textContent) {
+    parts.push(parentLbl.textContent.trim());
+  }
+  if (el.nextElementSibling && el.nextElementSibling.tagName === 'LABEL' && el.nextElementSibling.textContent) {
+    parts.push(el.nextElementSibling.textContent.trim());
+  }
+  if (el.parentElement && el.parentElement.textContent && el.parentElement.textContent.length < 80) {
+    parts.push(el.parentElement.textContent.trim());
+  }
+  return parts.join(' ').toLowerCase();
+}
+
+export function matchesRadioValue(fieldKey: FieldKey, radioOptionText: string, vaultValue: string): boolean {
+  const opt = radioOptionText.toLowerCase();
+  const target = (vaultValue || '').toLowerCase().trim();
+  if (!target) return false;
+
+  if (fieldKey === 'gender') {
+    const isFemaleTarget = target === 'female' || target === 'f' || target === 'babae';
+    const isMaleTarget = target === 'male' || target === 'm' || target === 'lalaki';
+
+    const isFemaleOption = /\b(female|babae|f)\b/i.test(opt) || opt === 'female' || opt === 'f' || opt === '2';
+    const isMaleOption = (/\b(male|lalaki|m)\b/i.test(opt) && !opt.includes('female')) || opt === 'male' || opt === 'm' || opt === '1';
+
+    if (isFemaleTarget) return isFemaleOption;
+    if (isMaleTarget) return isMaleOption;
+    return false;
+  }
+
+  if (fieldKey === 'civilStatus') {
+    if (target.includes('single')) return /\b(single|walang asawa|binata|dalaga|s)\b/i.test(opt) || opt === 'single' || opt === '1';
+    if (target.includes('married')) return /\b(married|may asawa|kasal|m)\b/i.test(opt) || opt === 'married' || opt === '2';
+    if (target.includes('widow')) return /\b(widow|widowed|biyudo|biyuda|w)\b/i.test(opt) || opt === 'widow' || opt === 'widowed' || opt === '3';
+    if (target.includes('separated')) return /\b(separated|hiwalay)\b/i.test(opt) || opt === 'separated' || opt === '4';
+    if (target.includes('divorced')) return /\b(divorce|divorced)\b/i.test(opt) || opt === 'divorced' || opt === '5';
+  }
+
+  return opt.includes(target) || target.includes(opt);
+}
+
 interface FieldRule {
   fieldKey: FieldKey;
   patterns: RegExp[];
@@ -22,6 +73,10 @@ const LIVEWIRE_PSA_RULES: { modelPattern: RegExp; fieldKey: FieldKey; label: str
   { modelPattern: /^owner(\.|\[)birthday/i, fieldKey: 'dateOfBirth', label: "Applicant's Date of Birth" },
 
   // Requester (Person submitting / ordering)
+  { modelPattern: /^requester(\.|\[)(civil|marital)/i, fieldKey: 'civilStatus', label: 'Requester Civil Status' },
+  { modelPattern: /^requester(\.|\[)(relationship|owner)/i, fieldKey: 'relationshipToOwner', label: 'Relationship to Document Owner' },
+  { modelPattern: /^owner(\.|\[)(civil|marital)/i, fieldKey: 'civilStatus', label: "Applicant's Civil Status" },
+  { modelPattern: /^owner(\.|\[)(relationship|owner)/i, fieldKey: 'relationshipToOwner', label: 'Relationship to Document Owner' },
   { modelPattern: /^requester(\.|\[)first/i, fieldKey: 'firstName', label: "Requester First Name" },
   { modelPattern: /^requester(\.|\[)middle/i, fieldKey: 'middleName', label: "Requester Middle Name" },
   { modelPattern: /^requester(\.|\[)last/i, fieldKey: 'lastName', label: "Requester Last Name" },
@@ -138,43 +193,64 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     confidence: 0.9,
   },
 
-  // Personal Name Parts
+  // Relationship to Document Owner (Crucial for PSA Serbilis & Helpline)
+  {
+    fieldKey: 'relationshipToOwner',
+    patterns: [
+      /relationship.*owner/i,
+      /document.*owner/i,
+      /certificate.*of[\s-_.]*my/i,
+      /relasyon.*may[-_]?ari/i,
+      /\brelationship\b/i,
+      /\brelation\b/i,
+    ],
+    confidence: 0.95,
+  },
+
+  // Personal Name Parts (Serbilis: Requester's First/Last/Middle Name, Your First/Last/Middle Name)
   {
     fieldKey: 'firstName',
     patterns: [
-      /\bfirst[-_]?name\b/i,
+      /(?:requester|owner|applicant|your)?[\s-_.]*(?:first|given)[\s-_.]*name/i,
+      /(?:requester|owner|applicant|your)[\s-_.]*(?:first|given)/i,
+      /\bfirst[\s-_.]*name\b/i,
       /\bfname\b/i,
-      /given[-_]?name/i,
-      /unang[-_]?pangalan/i,
+      /\bgiven[\s-_.]*name\b/i,
+      /unang[\s-_.]*pangalan/i,
       /\bpangalan\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.88,
   },
   {
     fieldKey: 'middleName',
     patterns: [
-      /\bmiddle[-_]?name\b/i,
+      /(?:requester|owner|applicant|your)?[\s-_.]*middle[\s-_.]*name/i,
+      /(?:requester|owner|applicant|your)[\s-_.]*(?:middle|mid)/i,
+      /\bmiddle[\s-_.]*name\b/i,
       /\bmname\b/i,
-      /gitnang[-_]?pangalan/i,
+      /\bmid[\s-_.]*name\b/i,
+      /gitnang[\s-_.]*pangalan/i,
     ],
-    confidence: 0.85,
+    confidence: 0.88,
   },
   {
     fieldKey: 'lastName',
     patterns: [
-      /\blast[-_]?name\b/i,
+      /(?:requester|owner|applicant|your)?[\s-_.]*(?:last|family)[\s-_.]*name/i,
+      /(?:requester|owner|applicant|your)[\s-_.]*(?:last|family|surname)/i,
+      /\blast[\s-_.]*name\b/i,
       /\blname\b/i,
       /\bsurname\b/i,
-      /\bfamily[-_]?name\b/i,
+      /\bfamily[\s-_.]*name\b/i,
       /\bapelyido\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.88,
   },
   {
     fieldKey: 'suffix',
     patterns: [
       /\bsuffix\b/i,
-      /name[-_]?extension/i,
+      /name[\s-_.]*extension/i,
       /\bext\b/i,
     ],
     confidence: 0.8,
@@ -182,39 +258,39 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
   {
     fieldKey: 'fullName',
     patterns: [
-      /\bfull[-_]?name\b/i,
-      /\bapplicant[-_]?name\b/i,
-      /buong[-_]?pangalan/i,
+      /\bfull[\s-_.]*name\b/i,
+      /\bapplicant[\s-_.]*name\b/i,
+      /buong[\s-_.]*pangalan/i,
     ],
     confidence: 0.8,
   },
 
-  // Demographics
+  // Demographics (Radio buttons & Dropdowns)
   {
     fieldKey: 'gender',
     patterns: [
       /\bgender\b/i,
       /\bsex\b/i,
       /\bkasarian\b/i,
-    ],
-    confidence: 0.85,
-  },
-  {
-    fieldKey: 'dateOfBirth',
-    patterns: [
-      /\bbirth[-_]?date\b/i,
-      /\bdate[-_]?of[-_]?birth\b/i,
-      /\bdob\b/i,
-      /kapanganakan/i,
-      /petsa.*kapanganakan/i,
+      /\b(male|female|babae|lalaki)\b/i,
     ],
     confidence: 0.9,
   },
   {
+    fieldKey: 'dateOfBirth',
+    patterns: [
+      /(?:date[\s-_.]*of[\s-_.]*birth|birth[\s-_.]*date|\bdob\b|petsa.*kapanganakan|kapanganakan)/i,
+      /(?:requester|owner|applicant|your)?[\s-_.]*(?:date[\s-_.]*of[\s-_.]*birth|birth[\s-_.]*date)/i,
+      /\bbirth[-_]?date\b/i,
+      /\bdate[-_]?of[-_]?birth\b/i,
+    ],
+    confidence: 0.95,
+  },
+  {
     fieldKey: 'placeOfBirth',
     patterns: [
-      /birth[-_]?place/i,
-      /place[-_]?of[-_]?birth/i,
+      /birth[\s-_.]*place/i,
+      /place[\s-_.]*of[\s-_.]*birth/i,
       /lugar.*kapanganakan/i,
       /\bpob\b/i,
     ],
@@ -223,33 +299,35 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
   {
     fieldKey: 'civilStatus',
     patterns: [
-      /civil[-_]?status/i,
-      /marital[-_]?status/i,
-      /katayuang[-_]?sibil/i,
+      /civil[\s-_.]*status/i,
+      /marital[\s-_.]*status/i,
+      /katayuang[\s-_.]*sibil/i,
+      /\b(single|married|widowed|separated|divorced)\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.9,
   },
 
   // Contact
   {
     fieldKey: 'mobileNumber',
     patterns: [
-      /mobile/i,
+      /(?:requester|owner|your)?[\s-_.]*mobile/i,
+      /\bmobile\b/i,
       /cellphone/i,
-      /cell[-_]?number/i,
-      /contact[-_]?number/i,
-      /phone[-_]?number/i,
+      /cell[\s-_.]*number/i,
+      /contact[\s-_.]*number/i,
+      /phone[\s-_.]*number/i,
       /\bcp\b/i,
       /telepono/i,
     ],
-    confidence: 0.85,
+    confidence: 0.9,
   },
   {
     fieldKey: 'emailAddress',
     patterns: [
       /\bemail\b/i,
       /\be-mail\b/i,
-      /email[-_]?address/i,
+      /email[\s-_.]*address/i,
     ],
     confidence: 0.95,
   },
@@ -294,10 +372,10 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'streetHouseNumber',
     patterns: [
       /street/i,
-      /house[-_]?no/i,
-      /address[-_]?line/i,
-      /residential[-_]?address/i,
-      /home[-_]?address/i,
+      /house[\s-_.]*no/i,
+      /address[\s-_.]*line/i,
+      /residential[\s-_.]*address/i,
+      /home[\s-_.]*address/i,
       /tirahan/i,
     ],
     confidence: 0.8,
@@ -306,8 +384,8 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'zipCode',
     patterns: [
       /\bzip\b/i,
-      /\bzip[-_]?code\b/i,
-      /postal[-_]?code/i,
+      /\bzip[\s-_.]*code\b/i,
+      /postal[\s-_.]*code/i,
     ],
     confidence: 0.85,
   },
@@ -317,7 +395,7 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'philsysId',
     patterns: [
       /philsys/i,
-      /national[-_]?id/i,
+      /national[\s-_.]*id/i,
       /\bpsn\b/i,
       /ephilid/i,
     ],
@@ -336,8 +414,8 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'tin',
     patterns: [
       /\btin\b/i,
-      /tax[-_]?identification/i,
-      /bir[-_]?tin/i,
+      /tax[\s-_.]*identification/i,
+      /bir[\s-_.]*tin/i,
     ],
     confidence: 0.9,
   },
@@ -345,7 +423,7 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'sssNumber',
     patterns: [
       /\bsss\b/i,
-      /social[-_]?security/i,
+      /social[\s-_.]*security/i,
       /\bcrn\b/i,
     ],
     confidence: 0.9,
@@ -353,7 +431,7 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
   {
     fieldKey: 'pagibigMid',
     patterns: [
-      /pag[-_]?ibig/i,
+      /pag[\s-_.]*ibig/i,
       /\bmid\b/i,
       /hdmf/i,
     ],
@@ -363,7 +441,7 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
     fieldKey: 'passportNumber',
     patterns: [
       /passport/i,
-      /passport[-_]?no/i,
+      /passport[\s-_.]*no/i,
       /pasaporte/i,
     ],
     confidence: 0.9,
@@ -371,6 +449,9 @@ const GENERIC_FIELD_RULES: FieldRule[] = [
 ];
 
 export function getVaultValue(vault: CitizenVaultData, fieldKey: FieldKey): string {
+  if (fieldKey === 'relationshipToOwner') {
+    return (vault as any).relationshipToOwner || 'Self';
+  }
   if (fieldKey === 'fullName') {
     return [vault.firstName, vault.middleName, vault.lastName, vault.suffix].filter(Boolean).join(' ');
   }
@@ -455,18 +536,31 @@ function getElementDescriptor(el: HTMLElement): string {
   const title = el.getAttribute('title');
   if (title) parts.push(title);
 
-  // Associated <label>
+    // Associated <label>
   if (id) {
-    const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
-    if (label && label.textContent) {
-      parts.push(label.textContent.trim());
-    }
+    try {
+      const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+      if (label && label.textContent) {
+        parts.push(label.textContent.trim());
+      }
+    } catch {}
   }
 
   // Parent label
   const parentLabel = el.closest('label');
   if (parentLabel && parentLabel.textContent) {
     parts.push(parentLabel.textContent.trim());
+  }
+
+  // Enclosing container (e.g. .form-group, .col, fieldset, div)
+  const container = el.closest('.form-group, .form-row, .form-item, .col, .col-md-3, .col-md-4, .col-md-6, .field, fieldset, tr, td');
+  if (container) {
+    const labels = container.querySelectorAll('label, .label, .control-label, legend, h3, h4, h5, span.title, p.label');
+    labels.forEach((lbl) => {
+      if (lbl && lbl.textContent && lbl.textContent.length < 100) {
+        parts.push(lbl.textContent.trim());
+      }
+    });
   }
 
   // Scoped section (e.g., section-owner, section-requester, section-father, section-mother)
@@ -599,6 +693,7 @@ function formatFieldLabel(key: FieldKey): string {
     placeOfBirth: 'Place of Birth',
     gender: 'Gender / Sex',
     civilStatus: 'Civil Status',
+    relationshipToOwner: 'Relationship to Document Owner',
     nationality: 'Nationality',
     fatherFirstName: "Father's First Name",
     fatherMiddleName: "Father's Middle Name",
@@ -636,7 +731,26 @@ function generateUniqueSelector(el: HTMLElement, fallbackIdx: number): string {
     return `${el.tagName.toLowerCase()}[wire\\:model="${CSS.escape(wireModel)}"], ${el.tagName.toLowerCase()}[wire\\:model\\.live="${CSS.escape(wireModel)}"]`;
   }
   if (el.id) return `#${CSS.escape(el.id)}`;
+
+  // For radio buttons, target the exact name + value combination
+  if (el instanceof HTMLInputElement && el.type === 'radio') {
+    const name = el.getAttribute('name');
+    const val = el.getAttribute('value');
+    if (name && val !== null) {
+      return `input[type="radio"][name="${CSS.escape(name)}"][value="${CSS.escape(val)}"]`;
+    }
+  }
+
   const name = el.getAttribute('name');
-  if (name) return `${el.tagName.toLowerCase()}[name="${CSS.escape(name)}"]`;
-  return `data-govguide-idx-${fallbackIdx}`;
+  if (name && !(el instanceof HTMLInputElement && el.type === 'radio')) {
+    return `${el.tagName.toLowerCase()}[name="${CSS.escape(name)}"]`;
+  }
+
+  // Unique data attribute fallback
+  try {
+    el.setAttribute('data-govguide-idx', String(fallbackIdx));
+    return `${el.tagName.toLowerCase()}[data-govguide-idx="${fallbackIdx}"]`;
+  } catch {
+    return `data-govguide-idx-${fallbackIdx}`;
+  }
 }

@@ -22,7 +22,7 @@ import type {
   InspectionReport,
   SavedVaultFile,
 } from '@/lib/services/charter-sources';
-import { CHARTER_SOURCES, formatFullName, parseNameParts } from '@/lib/services/charter-sources';
+import { CHARTER_SOURCES, formatFullName, parseNameParts, parseAddressParts } from '@/lib/services/charter-sources';
 import { redactSecrets, type GuardrailCardData } from '@/lib/ai/guardrails';
 import { SERVICES_REGISTRY } from '@/lib/services/registry';
 import { AgentResponseView } from '@/components/chat/AgentResponseView';
@@ -34,11 +34,12 @@ import {
   type OnlineApplicationData,
 } from '@/lib/services/online-services';
 import { RemediationBranchDrawer, type RemediationBranchData } from '@/components/chat/RemediationBranchDrawer';
+import { GmailNotificationsView } from '@/components/chat/GmailNotificationsView';
 import { OfficialPsaBirthCertForm } from '@/components/forms/OfficialPsaBirthCertForm';
 import { DfaAppointmentView } from '@/components/dfa/DfaAppointmentView';
 import { DpwhProjectsView } from '@/components/dpwh/DpwhProjectsView';
 import { RequestStatusSection } from '@/components/citizen/RequestStatusSection';
-import type { CitizenServiceRequest } from '@/lib/citizen/requests';
+import { type CitizenServiceRequest, getCitizenRequests } from '@/lib/citizen/requests';
 import { parseResponseJson, safeResponseJson } from '@/lib/utils';
 import {
   reconcileChecklistWithVault,
@@ -48,7 +49,7 @@ import {
 } from '@/lib/citizen/checklists';
 
 /* -------------------------------------------------------------------------- */
-/*  Icons (Matching KaagapAI 1.75px stroke SVG icon set)                      */
+/*  Icons (Matching GovGuide PH 1.75px stroke SVG icon set)                   */
 /* -------------------------------------------------------------------------- */
 
 function Icon({
@@ -935,7 +936,7 @@ function MenuItemRadio({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Collapsible Multi-Step AI Progress Component (KaagapAI `et`)              */
+/*  Collapsible Multi-Step AI Progress Component (`et`)                       */
 /* -------------------------------------------------------------------------- */
 
 interface StepItem {
@@ -1667,7 +1668,7 @@ function GuardrailAlertCard({ guardrail }: { guardrail: GuardrailCardData }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  "What's next" Suggestions Card (KaagapAI `tg`)                            */
+/*  "What's next" Suggestions Card (`tg`)                                     */
 /* -------------------------------------------------------------------------- */
 
 export interface NextActionItem {
@@ -1676,7 +1677,7 @@ export interface NextActionItem {
   hint?: string;
   action: 'message' | 'attach' | 'demo_file' | 'view';
   text?: string;
-  view?: 'chat' | 'details' | 'referrals' | 'tasks' | 'log';
+  view?: 'chat' | 'details' | 'referrals' | 'tasks' | 'log' | 'notifications';
   file?: { path: string; name: string; type: string };
 }
 
@@ -1892,24 +1893,6 @@ function MyDetailsView({
     }
   };
 
-  const metrics = useMemo(() => {
-    const applicableCount = checklistItems.filter((i) => i.status !== 'skipped').length;
-    const verifiedChecklists = checklistItems.filter((i) => i.status === 'verified').length;
-    const skippedCount = checklistItems.filter((i) => i.status === 'skipped').length;
-    const flaggedItems =
-      checklistItems.filter((i) => i.status === 'issue').length +
-      inspections.filter((r) => r.overall_status === 'issues_found').length;
-    const readyDocs = savedFiles.filter((f) => f.status === 'counter_ready').length;
-    return {
-      savedFilesCount: savedFiles.length,
-      verifiedChecklists: `${verifiedChecklists}/${applicableCount}${
-        skippedCount > 0 ? ` (${skippedCount} na-skip)` : ''
-      }`,
-      flaggedItems,
-      readyDocs,
-    };
-  }, [checklistItems, inspections, savedFiles]);
-
   const filteredInspections = useMemo(() => {
     const q = search.trim().toLowerCase();
     return inspections.filter((r) => {
@@ -1983,23 +1966,17 @@ function MyDetailsView({
 
   const showRequests = sectionTab === 'all' || sectionTab === 'requests';
   const showProfileAndFiles = sectionTab === 'all' || sectionTab === 'profile_files';
-  const showChecklists = sectionTab === 'all' || sectionTab === 'checklists';
-  const showInspections = sectionTab === 'all' || sectionTab === 'inspections';
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1104px] px-8 pt-10 pb-16">
         {/* Header */}
-        <header className="flex flex-wrap items-start justify-between gap-4 pb-6">
+        <header className="flex flex-wrap items-start justify-between gap-4 pb-5 border-b border-[var(--hairline)]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em]">
                 Aking Detalye
               </h1>
-              <span className="tag tag-brand">RA 10173 Protected</span>
-              <span className="tag bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                ⚡ Extension Linked
-              </span>
               {savedNotice && (
                 <span className="pop text-[12px] font-medium text-[var(--brand)]">
                   ✓ Naka-save
@@ -2007,81 +1984,23 @@ function MyDetailsView({
               )}
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                onAskInChat(
-                  'What do you know about my personal details, saved files, and checklist readiness from My Details?',
-                )
-              }
-              className="btn btn-primary btn-sm press"
-            >
-              {Icons.chat}
-              <span>Tanungin ang AI</span>
-            </button>
-            <button
-              type="button"
-              onClick={onResetAllToDemo}
-              className="btn btn-secondary btn-sm press"
-              title="I-reset ang profile at mga dokumento"
-            >
-              I-reset
-            </button>
-          </div>
         </header>
-
-        {/* 4-Metric Summary Bar */}
-        <dl className="grid grid-cols-2 border-y border-[var(--hairline)] sm:grid-cols-4">
-          {[
-            { label: 'Nai-save', value: metrics.savedFilesCount },
-            { label: 'Handa', value: metrics.verifiedChecklists },
-            { label: 'May Isyu', value: metrics.flaggedItems, accent: true },
-            { label: 'Counter-Ready', value: metrics.readyDocs },
-          ].map((m, idx) => (
-            <div
-              key={m.label}
-              className={`px-1 py-4 sm:px-5 ${idx > 0 ? 'sm:border-l sm:border-[var(--hairline)]' : 'sm:pl-0'
-                }`}
-            >
-              <dt className="flex items-center gap-1.5 text-[12px] text-[var(--label-2)]">
-                {m.accent && Number(m.value) > 0 && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                )}
-                {m.label}
-              </dt>
-              <dd className="pop mt-1 text-[24px] leading-none font-semibold tracking-tight tabular-nums">
-                {m.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
 
         {/* Sub-section Switcher */}
         <div className="py-5">
-          <div className="w-full sm:w-[560px]">
+          <div className="w-full sm:w-[420px]">
             <SegmentedControl
               label="My Details sections"
               value={sectionTab}
               onChange={setSectionTab}
               options={[
                 { value: 'all', label: 'Lahat' },
-                { value: 'requests', label: 'Requests' },
                 { value: 'profile_files', label: 'Profile & Vault' },
-                { value: 'checklists', label: `Checklists (${checklistItems.length})` },
-                { value: 'inspections', label: `Inspections (${inspections.length})` },
+                { value: 'requests', label: 'Requests' },
               ]}
             />
           </div>
         </div>
-
-        {/* 0. Service Requests & Real-Time Status Bar (Agency Chrome Extension Sync) */}
-        {showRequests && (
-          <div className="enter pb-8">
-            <RequestStatusSection citizenId={applicant.id} onAskInChat={onAskInChat} />
-          </div>
-        )}
 
         {/* 1. Personal Details & Saved Files Vault */}
         {showProfileAndFiles && (
@@ -2183,6 +2102,21 @@ function MyDetailsView({
 
                   <label className="block">
                     <span className="mb-1 block text-[12px] font-medium text-[var(--label-2)]">
+                      Sex / Gender
+                    </span>
+                    <select
+                      value={draftProfile.gender || ''}
+                      onChange={(e) => handleFieldChange('gender', e.target.value)}
+                      className="field h-9 w-full px-3 text-[13px]"
+                    >
+                      <option value="">Select Sex</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-medium text-[var(--label-2)]">
                       Civil Status
                     </span>
                     <select
@@ -2196,6 +2130,19 @@ function MyDetailsView({
                       <option value="Widowed">Widowed</option>
                       <option value="Separated">Separated</option>
                     </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-medium text-[var(--label-2)]">
+                      Place of Birth
+                    </span>
+                    <input
+                      type="text"
+                      value={draftProfile.place_of_birth || ''}
+                      onChange={(e) => handleFieldChange('place_of_birth', e.target.value)}
+                      placeholder="e.g. Lipa City, Batangas"
+                      className="field h-9 w-full px-3 text-[13px]"
+                    />
                   </label>
 
                   <label className="block sm:col-span-2">
@@ -2729,510 +2676,10 @@ function MyDetailsView({
           </div>
         )}
 
-        {/* 2. Combined Interactive Requirements Checklists */}
-        {showChecklists && (
-          <div className="enter pb-10">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--hairline)] pb-3">
-              <button
-                type="button"
-                onClick={() => setIsChecklistsCollapsed((prev) => !prev)}
-                className="flex items-center gap-2.5 text-left group press"
-                aria-expanded={!isChecklistsCollapsed}
-              >
-                <h2 className="text-[18px] font-semibold tracking-tight group-hover:text-[var(--brand)] transition-colors">
-                  Requirements Checklists
-                </h2>
-                <span className="tag bg-[var(--fill)] text-[var(--label-2)]">
-                  {checklistItems.filter((i) => i.status === 'verified').length}/{checklistItems.filter((i) => i.status !== 'skipped').length} Ready
-                </span>
-                <span
-                  className={`chev text-[var(--label-3)] transition-transform duration-200 ${
-                    isChecklistsCollapsed ? '' : 'rotate-90'
-                  }`}
-                >
-                  {Icons.chevronRight}
-                </span>
-              </button>
-
-              {!isChecklistsCollapsed && (
-                <button
-                  type="button"
-                  onClick={toggleAllSections}
-                  className="text-[12px] font-medium text-[var(--label-2)] hover:text-slate-900 underline press"
-                >
-                  {allSectionsCollapsed ? 'I-expand Lahat' : 'I-collapse Lahat'}
-                </button>
-              )}
-            </div>
-
-            {!isChecklistsCollapsed && (
-              <div className="space-y-3 pt-3">
-                {checklistSections.map((sec) => {
-                  const items = checklistItems.filter((i) => i.service_code === sec.code);
-                  const isCollapsed = Boolean(collapsedSections[sec.code]);
-                  const verifiedCount = items.filter((i) => i.status === 'verified').length;
-                  const applicableCount = items.filter((i) => i.status !== 'skipped').length;
-                  const hasIssue = items.some(
-                    (i) =>
-                      i.status === 'issue' ||
-                      Boolean(i.issue_note && i.status !== 'verified' && i.status !== 'skipped'),
-                  );
-
-                  return (
-                    <section
-                      key={sec.code}
-                      className="rounded-xl border border-[var(--hairline)] bg-slate-50/50 p-3.5 transition-all"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleSection(sec.code)}
-                        className="flex w-full items-center justify-between text-left group press"
-                        aria-expanded={!isCollapsed}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[13px] font-semibold text-slate-900 group-hover:text-[var(--brand)] transition-colors">
-                            {sec.label}
-                          </span>
-                          <span className="tag bg-white text-slate-600 border border-slate-200 font-medium">
-                            {verifiedCount}/{applicableCount} Ready
-                          </span>
-                          {hasIssue && <span className="tag tag-danger">May Isyu</span>}
-                        </div>
-                        <span
-                          className={`chev text-[var(--label-3)] text-xs transition-transform duration-200 ${
-                            isCollapsed ? '' : 'rotate-90'
-                          }`}
-                        >
-                          {Icons.chevronRight}
-                        </span>
-                      </button>
-
-                      {!isCollapsed && (
-                        <div className="space-y-0 pt-3 mt-3 border-t border-[var(--hairline)]">
-                          {items.map((item, idx) => {
-                            const isDone = item.status === 'verified';
-                            const isSkipped = item.status === 'skipped';
-                            const isIssue =
-                              item.status === 'issue' || (!isSkipped && Boolean(item.issue_note && !isDone));
-                            const stepNum = idx + 1;
-                            const isLast = idx === items.length - 1;
-
-                            return (
-                              <div key={item.id} className="relative flex items-start gap-3 pb-3">
-                                {/* Connector Line */}
-                                {!isLast && (
-                                  <div
-                                    className={`absolute left-[13px] top-[26px] bottom-0 w-[2px] ${
-                                      isDone
-                                        ? 'bg-emerald-400'
-                                        : isSkipped
-                                          ? 'bg-slate-300'
-                                          : isIssue
-                                            ? 'bg-rose-300'
-                                            : 'bg-slate-200'
-                                    }`}
-                                    aria-hidden="true"
-                                  />
-                                )}
-
-                                {/* Step Badge */}
-                                <button
-                                  type="button"
-                                  role="checkbox"
-                                  aria-checked={isDone}
-                                  onClick={() => toggleChecklistItem(item.id)}
-                                  className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all ${
-                                    isDone
-                                      ? 'bg-emerald-600 text-white shadow-xs'
-                                      : isSkipped
-                                        ? 'bg-slate-200 text-slate-700 border border-slate-300 hover:bg-slate-300'
-                                        : isIssue
-                                          ? 'bg-rose-600 text-white shadow-xs ring-4 ring-rose-100'
-                                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                                  }`}
-                                  title={
-                                    isDone
-                                      ? 'Mark as Pending'
-                                      : isSkipped
-                                        ? 'Skipped (Click to mark Ready)'
-                                        : 'Mark as Ready'
-                                  }
-                                >
-                                  {isDone ? (
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                      <path
-                                        d="M5 12.5l4.5 4.5L19 7.5"
-                                        stroke="white"
-                                        strokeWidth="3.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  ) : isSkipped ? (
-                                    <span className="text-[11px] font-bold">⏭</span>
-                                  ) : isIssue ? (
-                                    <span className="text-[11px]">!</span>
-                                  ) : (
-                                    <span>{stepNum}</span>
-                                  )}
-                                </button>
-
-                                {/* Step Content */}
-                                <div
-                                  className={`flex-1 min-w-0 rounded-xl border p-3 transition-all ${
-                                    isIssue
-                                      ? 'border-rose-200 bg-rose-50/60'
-                                      : isDone
-                                        ? 'border-emerald-200 bg-emerald-50/40'
-                                        : isSkipped
-                                          ? 'border-slate-200 bg-slate-50/50 opacity-80'
-                                          : 'border-slate-200 bg-white'
-                                  }`}
-                                >
-                                  <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                        Step {stepNum}
-                                      </span>
-                                      <span
-                                        className={`text-xs sm:text-[13px] font-semibold truncate ${
-                                          isDone
-                                            ? 'text-slate-400 line-through'
-                                            : isSkipped
-                                              ? 'text-slate-500 line-through'
-                                              : 'text-slate-900'
-                                        }`}
-                                      >
-                                        {item.name}
-                                      </span>
-                                      {item.isPrimaryId && (
-                                        <span className="rounded bg-blue-100 px-1.5 py-0.2 text-[9px] font-bold text-blue-700">
-                                          Primary ID
-                                        </span>
-                                      )}
-                                      {isSkipped && (
-                                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-700">
-                                          Skipped
-                                        </span>
-                                      )}
-                                      {isDone && (
-                                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
-                                          ✓ Ready
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleChecklistItem(item.id)}
-                                        className="text-[11px] font-medium text-slate-500 hover:text-slate-800 underline"
-                                      >
-                                        {isDone ? 'Mark Pending' : 'Ready'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleSkipChecklistItem(item.id)}
-                                        className="text-[11px] font-medium text-slate-500 hover:text-slate-800 underline"
-                                      >
-                                        {isSkipped ? 'Unskip' : 'Skip'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (item.status === 'issue' || item.issue_note) {
-                                            const isExp =
-                                              item.issue_note?.toLowerCase().includes('expired') ||
-                                              item.name.toLowerCase().includes('postal');
-                                            const isMissing =
-                                              item.issue_note?.toLowerCase().includes('seal') ||
-                                              item.issue_note?.toLowerCase().includes('oath') ||
-                                              item.name.toLowerCase().includes('barangay');
-                                            openRemediationBranch({
-                                              category: isExp ? 'expired' : isMissing ? 'missing' : 'general',
-                                              title: item.name,
-                                              documentTitle: item.name,
-                                              serviceCode: item.service_code,
-                                              detail:
-                                                item.issue_note ||
-                                                "Kailangang suriin at maisaayos alinsunod sa Citizen's Charter bago magpunta sa counter.",
-                                              requirementName: item.name,
-                                            });
-                                          } else {
-                                            onCheckInChat(item.service_code, item.name);
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
-                                      >
-                                        {Icons.chat}
-                                        <span>Open in chat</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Step Error Box if flagged */}
-                                  {isIssue && item.issue_note && (
-                                    <div className="mt-2 rounded-lg border border-rose-300 bg-rose-100/90 p-2 text-xs text-rose-900">
-                                      <p className="text-[11.5px] text-rose-800 font-medium">
-                                        {item.issue_note}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 3. Combined AI Document Inspections */}
-        {showInspections && (
-          <div className="enter">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hairline)] pb-3">
-              <div>
-                <h2 className="text-[18px] font-semibold tracking-tight">
-                  AI Document Inspections
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 py-4">
-              <div className="w-full sm:w-[340px]">
-                <SegmentedControl
-                  label="Filter inspections"
-                  value={filter}
-                  onChange={setFilter}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'issues', label: 'Needs Fix' },
-                    { value: 'expired', label: 'Expired' },
-                    { value: 'ready', label: 'Ready' },
-                  ]}
-                />
-              </div>
-              <label className="relative block w-full sm:w-[260px]">
-                <span className="sr-only">Search inspections</span>
-                <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[var(--label-3)]">
-                  {Icons.search}
-                </span>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search ID, service, issue..."
-                  className="field h-8 w-full pr-2.5 pl-8 text-[13px]"
-                />
-              </label>
-            </div>
-
-            <div
-              aria-hidden="true"
-              className="hidden border-b border-[var(--hairline)] pb-2 text-[11px] font-medium tracking-[0.06em] text-[var(--label-3)] uppercase md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1fr)_96px_80px_16px] md:gap-6"
-            >
-              <span>Document / Requirement</span>
-              <span>Target Service</span>
-              <span>Status</span>
-              <span>Pre-Flight</span>
-              <span className="text-right">Inspected</span>
-              <span />
-            </div>
-
-            {filteredInspections.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <span className="text-[var(--label-3)]">{Icons.docLg}</span>
-                <p className="mt-2 text-[14px] font-medium text-[var(--fg)]">No inspection records yet</p>
-              </div>
-            ) : (
-              <ul>
-                {filteredInspections.map((r) => {
-                  const isOpen = openId === r.id;
-                  const isReady = r.overall_status === 'counter_ready';
-                  const stage = isReady ? 5 : r.summary_counts.expired > 0 ? 2 : 3;
-
-                  return (
-                    <li key={r.id} className="border-b border-[var(--hairline)]">
-                      <button
-                        type="button"
-                        onClick={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-                        aria-expanded={isOpen}
-                        className="row-btn grid w-full grid-cols-1 items-center gap-1 py-3.5 text-left md:-mx-3 md:w-[calc(100%+24px)] md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1fr)_96px_80px_16px] md:gap-6 md:rounded-[10px] md:px-3"
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-[14px] font-medium">
-                              {r.document_title}
-                            </span>
-                            {r.summary_counts.expired > 0 && (
-                              <span className="tag tag-danger shrink-0">Expired</span>
-                            )}
-                            {r.summary_counts.mismatch > 0 && (
-                              <span className="tag tag-accent shrink-0">Mismatch</span>
-                            )}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[13px] text-[var(--label-2)]">
-                            {r.issues[0]?.title}
-                          </span>
-                        </span>
-
-                        <span className="truncate text-[13px] text-[var(--label-2)]">
-                          {r.service_name}
-                        </span>
-
-                        <span>
-                          <span className="inline-flex items-center gap-2 text-[13px] font-medium">
-                            <span
-                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${isReady ? 'bg-[var(--brand)]' : 'bg-[var(--accent)]'
-                                }`}
-                            />
-                            {isReady ? 'Counter-Ready' : 'Action Needed'}
-                          </span>
-                        </span>
-
-                        <span className="hidden w-full gap-[3px] md:flex">
-                          {INSPECTION_STAGES.map((s, idx) => (
-                            <span
-                              key={s}
-                              className={`h-1 flex-1 rounded-full ${idx < stage || (idx === stage && isReady)
-                                ? 'bg-[var(--brand)]'
-                                : idx === stage
-                                  ? 'bg-[var(--accent)]'
-                                  : 'bg-[var(--fill-2)]'
-                                }`}
-                            />
-                          ))}
-                        </span>
-
-                        <span className="hidden text-right text-[13px] text-[var(--label-2)] tabular-nums md:block">
-                          Today
-                        </span>
-
-                        <span
-                          className="chev hidden text-[var(--label-3)] md:inline-flex"
-                          data-open={isOpen}
-                        >
-                          {Icons.chevronRight}
-                        </span>
-                      </button>
-
-                      <div className="disclosure" data-open={isOpen}>
-                        <div>
-                          <div className="grid gap-8 pt-2 pb-6 md:grid-cols-[minmax(0,1fr)_260px]">
-                            <div className="min-w-0 space-y-3">
-                              {r.issues.map((iss) => (
-                                <div
-                                  key={iss.id}
-                                  className="rounded-xl p-3 text-[13px] shadow-[0_0_0_1px_var(--hairline)]"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold">{iss.title}</span>
-                                    <span
-                                      className={`tag ${iss.category === 'expired'
-                                        ? 'tag-danger'
-                                        : iss.category === 'valid'
-                                          ? 'tag-brand'
-                                          : 'tag-accent'
-                                        }`}
-                                    >
-                                      {iss.category.toUpperCase()}
-                                    </span>
-                                  </div>
-                                  <p className="mt-1 text-[var(--label-2)]">{iss.detail}</p>
-                                  <p className="mt-1.5 text-[12px] text-[var(--label-3)]">
-                                    Rule: {iss.charter_rule}
-                                  </p>
-                                </div>
-                              ))}
-
-                              <div className="flex flex-wrap items-center gap-2 pt-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onAskInChat(
-                                      `Re-inspect ${r.document_title} against my current My Details profile and help me fix the issues`,
-                                      {
-                                        path: `/demo/${r.file_name}`,
-                                        name: r.file_name,
-                                        type: 'image/png',
-                                      },
-                                    )
-                                  }
-                                  className="btn btn-primary btn-sm press"
-                                >
-                                  Re-Inspect with My Details
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openSource(r.source_id)}
-                                  className="btn btn-secondary btn-sm press"
-                                >
-                                  {Icons.doc} Open Charter Source
-                                </button>
-                              </div>
-                            </div>
-
-                            <ol className="relative">
-                              {INSPECTION_STAGES.map((s, idx) => {
-                                const state = idx < stage ? 'done' : idx === stage ? 'now' : 'next';
-                                const isLast = idx === INSPECTION_STAGES.length - 1;
-                                return (
-                                  <li
-                                    key={s}
-                                    className="relative flex items-center gap-3 pb-3 last:pb-0"
-                                  >
-                                    {!isLast && (
-                                      <span
-                                        aria-hidden="true"
-                                        className={`absolute top-[14px] bottom-[-2px] left-[4.5px] w-px ${state === 'done'
-                                          ? 'bg-[var(--brand)]'
-                                          : 'bg-[var(--hairline)]'
-                                          }`}
-                                      />
-                                    )}
-                                    <span
-                                      aria-hidden="true"
-                                      className={`relative z-10 h-2.5 w-2.5 shrink-0 rounded-full ${state === 'done'
-                                        ? 'bg-[var(--brand)]'
-                                        : state === 'now'
-                                          ? isReady
-                                            ? 'bg-[var(--brand)] shadow-[0_0_0_3px_var(--brand-soft)]'
-                                            : 'bg-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
-                                          : 'bg-white shadow-[inset_0_0_0_1.5px_var(--label-3)]'
-                                        }`}
-                                    />
-                                    <span
-                                      className={`flex-1 text-[13px] ${state === 'next'
-                                        ? 'text-[var(--label-3)]'
-                                        : state === 'now'
-                                          ? 'font-medium'
-                                          : 'text-[var(--label-2)]'
-                                        }`}
-                                    >
-                                      {s}
-                                    </span>
-                                    {state === 'now' && (
-                                      <span className="text-[12px] text-[var(--label-2)]">
-                                        {isReady ? 'Verified' : 'Flagged'}
-                                      </span>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ol>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+        {/* 2. Service Requests & Real-Time Status Bar (Agency Chrome Extension Sync) */}
+        {showRequests && (
+          <div className="enter pb-8">
+            <RequestStatusSection citizenId={applicant.id} onAskInChat={onAskInChat} />
           </div>
         )}
       </div>
@@ -3241,7 +2688,7 @@ function MyDetailsView({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Audit Log View (KaagapAI Hash-Chained Access & Inspection Log)            */
+/*  Audit Log View (GovGuide PH Hash-Chained Access & Inspection Log)         */
 /* -------------------------------------------------------------------------- */
 
 function AuditLogView({ logs }: { logs: AuditEntry[] }) {
@@ -3393,7 +2840,7 @@ function AuditLogView({ logs }: { logs: AuditEntry[] }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Slide-Over Official Charter Source Drawer (KaagapAI `tb` panel)           */
+/*  Slide-Over Official Charter Source Drawer (`tb` panel)                    */
 /* -------------------------------------------------------------------------- */
 
 function SourceDrawer({
@@ -3483,7 +2930,7 @@ function SourceDrawer({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Guided Spotlight Tour (KaagapAI `e_` Tour Overlay)                        */
+/*  Guided Spotlight Tour (`e_` Tour Overlay)                                 */
 /* -------------------------------------------------------------------------- */
 
 const TOUR_STEPS = [
@@ -3665,14 +3112,9 @@ interface ConversationThread {
 
 const SHORTCUT_PILLS = [
   {
-    id: 'dfa_passport',
-    label: 'DFA Passport Requirements',
-    icon: Icons.passport,
-  },
-  {
-    id: 'dpwh_reviews',
-    label: 'DPWH Projects & Reviews',
-    icon: Icons.construction,
+    id: 'nbi_checklist',
+    label: 'Prepare NBI Checklist',
+    icon: Icons.tasks,
   },
   {
     id: 'psa_helpline',
@@ -3683,6 +3125,11 @@ const SHORTCUT_PILLS = [
     id: 'demo_expired_id',
     label: 'Check Expired/Mismatch ID',
     icon: Icons.upload,
+  },
+  {
+    id: 'demo_brgy',
+    label: 'Inspect Brgy. Certificate',
+    icon: Icons.docLg,
   },
 ];
 
@@ -3712,7 +3159,7 @@ function FileThumb({ file }: { file: File }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Main CitizenChatPage (KaagapAI Shell + ChatGPT UI/UX)                     */
+/*  Main CitizenChatPage (GovGuide PH Shell + ChatGPT UI/UX)                  */
 /* -------------------------------------------------------------------------- */
 
 const subscribeNoop = () => () => { };
@@ -3720,7 +3167,7 @@ const subscribeNoop = () => () => { };
 export default function CitizenChatPage() {
   const [role, setRole] = useState<'jobseeker' | 'married_applicant' | 'new_citizen'>('new_citizen');
   const [view, setView] = useState<
-    'chat' | 'details' | 'referrals' | 'tasks' | 'log'
+    'chat' | 'details' | 'referrals' | 'tasks' | 'log' | 'notifications'
   >('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -3749,7 +3196,19 @@ export default function CitizenChatPage() {
 
   // Agency Milestone Bridge States (Chrome Extension Live Sync)
   const [agencyMilestones, setAgencyMilestones] = useState<CitizenServiceRequest[]>([]);
-  const [unreadMilestonesCount, setUnreadMilestonesCount] = useState<number>(0);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('govguide_read_notifications');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const unreadMilestonesCount = useMemo(() => {
+    return agencyMilestones.filter((m) => !readNotificationIds.includes(m.id)).length;
+  }, [agencyMilestones, readNotificationIds]);
   const lastSeenRequestStateRef = useRef<Map<string, { step: number; status: string; notes: string }>>(new Map());
 
   const [sourceDrawerId, setSourceDrawerId] = useState<string | null>(null);
@@ -3790,13 +3249,43 @@ export default function CitizenChatPage() {
             .maybeSingle();
 
           if (profile && isMounted) {
+            let agencyObj: { id: string; code: string; name: string } | null = null;
+            if (profile.agency_id) {
+              const { data: ag } = await supabase
+                .from('agencies')
+                .select('id, code, name')
+                .eq('id', profile.agency_id)
+                .maybeSingle();
+              if (ag) agencyObj = ag;
+            }
+            if (!agencyObj) {
+              if (user.email?.includes('psa')) agencyObj = { id: 'psa', code: 'PSA', name: 'Philippine Statistics Authority' };
+              else if (user.email?.includes('dfa')) agencyObj = { id: 'dfa', code: 'DFA', name: 'Department of Foreign Affairs' };
+              else if (user.email?.includes('dpwh')) agencyObj = { id: 'dpwh', code: 'DPWH', name: 'Department of Public Works and Highways' };
+            }
+
+            const isAgency = profile.role === 'agency_admin' || !!profile.agency_id || !!agencyObj || (user.email ? user.email.endsWith('.gov.ph') : false);
+
+            const displayName = isAgency && agencyObj
+              ? `${agencyObj.name} (${agencyObj.code})`
+              : (profile.full_name || profile.first_name || user.email?.split('@')[0] || 'Citizen Applicant');
+
+            const initials = isAgency && agencyObj
+              ? agencyObj.code
+              : ((profile.full_name || user.email || 'CA').slice(0, 2).toUpperCase());
+
+            const title = isAgency && agencyObj
+              ? `${agencyObj.code} · Official Agency Account`
+              : 'Verified Account';
+
             setApplicant((prev) => ({
               ...prev,
               id: profile.id,
-              display_name: profile.full_name || profile.first_name || user.email?.split('@')[0] || 'Citizen Applicant',
-              first_name: profile.first_name || undefined,
+              role: isAgency ? 'agency_admin' : 'citizen',
+              display_name: displayName,
+              first_name: isAgency && agencyObj ? agencyObj.name : (profile.first_name || undefined),
               middle_name: profile.middle_name || undefined,
-              last_name: profile.last_name || undefined,
+              last_name: isAgency && agencyObj ? `(${agencyObj.code})` : (profile.last_name || undefined),
               suffix: profile.suffix || undefined,
               birth_date: profile.birth_date || '',
               civil_status: profile.civil_status || '',
@@ -3804,7 +3293,8 @@ export default function CitizenChatPage() {
               city: profile.city || '',
               phone: profile.phone || '',
               email: profile.email || user.email || '',
-              initials: (profile.full_name || user.email || 'CA').slice(0, 2).toUpperCase(),
+              initials,
+              title,
             }));
           }
         }
@@ -3884,7 +3374,13 @@ export default function CitizenChatPage() {
           ) {
             // Milestone updated by Agency Chrome Extension!
             prevMap.set(req.id, { step: req.currentStep, status: req.status, notes: req.officerNotes });
-            setUnreadMilestonesCount((c) => c + 1);
+            setReadNotificationIds((prevIds) => {
+              const nextIds = prevIds.filter((id) => id !== req.id);
+              try {
+                localStorage.setItem('govguide_read_notifications', JSON.stringify(nextIds));
+              } catch {}
+              return nextIds;
+            });
 
             const milestoneMsg: ChatMessage = {
               id: `agency-milestone-${Date.now()}`,
@@ -4037,7 +3533,7 @@ export default function CitizenChatPage() {
     () => 'Hello',
   );
 
-  // Smooth FLIP transition on composer when moving from empty state to active chat (exact KaagapAI feel)
+  // Smooth FLIP transition on composer when moving from empty state to active chat (smooth spring feel)
   useLayoutEffect(() => {
     const el = composerWrapRef.current;
     if (!el) return;
@@ -4193,7 +3689,7 @@ export default function CitizenChatPage() {
 
       const isInspection = filesToSend.length > 0;
       const lower = textToSend.toLowerCase();
-      const isJobseeker = /\b(first[\s-]?time|jobseeker|waiver|ra\s*11261|libre|free)\b/i.test(lower);
+      const isJobseeker = /\b(jobseeker|job\s*seeking|unang\s*trabaho|naghahanap\s*ng\s*trabaho|ra\s*11261)\b/i.test(lower);
       const isPsa = /\b(psa|helpline|birth\s*cert|marriage\s*cert|delivery|courier)\b/i.test(lower);
       const isNbi = /\b(nbi|clearance|hit|fingerprint|biometrics)\b/i.test(lower);
       const isPhilhealth = /\b(philhealth|pmrf|mdr|pin|member)\b/i.test(lower);
@@ -4345,6 +3841,14 @@ export default function CitizenChatPage() {
             ...prev,
             ...data.learnedDetails,
           }));
+        }
+
+        // Sync any newly created service process from inquiry into agencyMilestones
+        if (data.createdRequest) {
+          setAgencyMilestones((prev) => {
+            const exists = prev.some((r) => r.id === data.createdRequest.id);
+            return exists ? prev : [data.createdRequest, ...prev];
+          });
         }
 
         // Open official PSA, DFA, or DPWH forms/reviews modal if requested by citizen
@@ -4807,10 +4311,11 @@ export default function CitizenChatPage() {
                   for (const f of report.fields) {
                     if (!f.value || typeof f.value !== 'string' || !f.value.trim() || f.value === 'Not specified') continue;
                     const val = f.value.trim();
+                    const k = (f.key || '').toLowerCase();
+                    const lbl = (f.label || '').toLowerCase();
 
                     if (
-                      (f.key === 'full_name' || f.key === 'name' || /full\s*name/i.test(f.label || '')) &&
-                      !val.includes('Juan Santos Dela Cruz') &&
+                      (k === 'full_name' || k === 'name' || /full\s*name/i.test(lbl)) &&
                       val !== 'CITIZEN APPLICANT'
                     ) {
                       updatedInfo.display_name = val;
@@ -4823,50 +4328,61 @@ export default function CitizenChatPage() {
                     }
 
                     if (
-                      (f.key === 'birth_date' || f.key === 'dob' || /birth/i.test(f.label || '')) &&
+                      (k === 'birth_date' || k === 'dob' || /birth/i.test(lbl)) &&
                       val !== 'Foundational Identity Record'
                     ) {
                       updatedInfo.birth_date = val;
                     }
 
-                    if (
-                      (f.key === 'father_name' || /father.*name/i.test(f.label || '')) &&
-                      !val.includes('Roberto Mendoza Dela Cruz')
-                    ) {
+                    if ((k === 'gender' || k === 'sex' || /gender|sex/i.test(lbl)) && !updatedInfo.gender) {
+                      updatedInfo.gender = /f/i.test(val) ? 'Female' : 'Male';
+                    }
+
+                    if (k === 'father_name' || /father.*name/i.test(lbl)) {
                       updatedInfo.father_name = val;
                       const fParts = parseNameParts(val);
                       if (!updatedInfo.father_first_name) updatedInfo.father_first_name = fParts.first_name;
                       if (!updatedInfo.father_middle_name) updatedInfo.father_middle_name = fParts.middle_name;
                       if (!updatedInfo.father_last_name) updatedInfo.father_last_name = fParts.last_name;
                     }
-                    if (f.key === 'father_first_name' && val !== 'Roberto') updatedInfo.father_first_name = val;
-                    if (f.key === 'father_middle_name' && val !== 'Mendoza') updatedInfo.father_middle_name = val;
-                    if (f.key === 'father_last_name' && val !== 'Dela Cruz') updatedInfo.father_last_name = val;
+                    if (k === 'father_first_name') updatedInfo.father_first_name = val;
+                    if (k === 'father_middle_name') updatedInfo.father_middle_name = val;
+                    if (k === 'father_last_name') updatedInfo.father_last_name = val;
 
-                    if (
-                      (f.key === 'mother_maiden_name' || f.key === 'mother_name' || /mother.*name/i.test(f.label || '')) &&
-                      !val.includes('Maria Gomez Santos')
-                    ) {
+                    if (k === 'mother_maiden_name' || k === 'mother_name' || /mother.*name/i.test(lbl)) {
                       updatedInfo.mother_maiden_name = val;
                       const mParts = parseNameParts(val);
                       if (!updatedInfo.mother_first_name) updatedInfo.mother_first_name = mParts.first_name;
                       if (!updatedInfo.mother_middle_name) updatedInfo.mother_middle_name = mParts.middle_name;
                       if (!updatedInfo.mother_last_name) updatedInfo.mother_last_name = mParts.last_name;
                     }
-                    if (f.key === 'mother_first_name' && val !== 'Maria') updatedInfo.mother_first_name = val;
-                    if (f.key === 'mother_middle_name' && val !== 'Gomez') updatedInfo.mother_middle_name = val;
-                    if (f.key === 'mother_last_name' && val !== 'Santos') updatedInfo.mother_last_name = val;
+                    if (k === 'mother_first_name') updatedInfo.mother_first_name = val;
+                    if (k === 'mother_middle_name') updatedInfo.mother_middle_name = val;
+                    if (k === 'mother_last_name') updatedInfo.mother_last_name = val;
 
-                    if ((f.key === 'barangay' || /barangay/i.test(f.label || '')) && val !== 'Brgy. San Isidro') updatedInfo.barangay = val;
-                    if ((f.key === 'city' || /city|municipality/i.test(f.label || '')) && val !== 'Quezon City') updatedInfo.city = val;
-                    if ((f.key === 'province' || /province/i.test(f.label || '')) && val !== 'Metro Manila') updatedInfo.province = val;
-                    if (f.key === 'place_of_birth' || /place of birth/i.test(f.label || '')) updatedInfo.place_of_birth = val;
-                    if (f.key === 'street_address' && val !== '1024 General Luna Street') updatedInfo.street_address = val;
-                    if (f.key === 'residential_address') updatedInfo.residential_address = val;
-                    if ((f.key === 'philsys_id' || f.key === 'id_number') && /\d{4}/.test(val) && !val.includes('••••')) {
+                    if (k === 'barangay' || /barangay/i.test(lbl)) updatedInfo.barangay = val;
+                    if (k === 'city' || /city|municipality/i.test(lbl)) updatedInfo.city = val;
+                    if (k === 'province' || /province/i.test(lbl)) updatedInfo.province = val;
+                    if (k === 'place_of_birth' || /place of birth/i.test(lbl)) updatedInfo.place_of_birth = val;
+                    if (k === 'street_address' || /street/i.test(lbl)) updatedInfo.street_address = val;
+                    if (k === 'residential_address' || /residential|address/i.test(lbl)) updatedInfo.residential_address = val;
+                    if ((k === 'philsys_id' || k === 'id_number' || /philsys|national id/i.test(lbl)) && /\d{4}/.test(val) && !val.includes('••••')) {
                       updatedInfo.philsys_id = val;
                       updatedInfo.philsys_card_number = val;
                     }
+                  }
+
+                  if (updatedInfo.residential_address && (!updatedInfo.barangay || !updatedInfo.city)) {
+                    const addr = parseAddressParts(updatedInfo.residential_address);
+                    if (!updatedInfo.street_address && addr.street) updatedInfo.street_address = addr.street;
+                    if (!updatedInfo.barangay && addr.barangay) updatedInfo.barangay = addr.barangay;
+                    if (!updatedInfo.city && addr.city) updatedInfo.city = addr.city;
+                    if (!updatedInfo.province && addr.province) updatedInfo.province = addr.province;
+                  }
+                  if (updatedInfo.place_of_birth && (!updatedInfo.city || !updatedInfo.province)) {
+                    const pob = parseAddressParts(updatedInfo.place_of_birth);
+                    if (!updatedInfo.city && pob.city) updatedInfo.city = pob.city;
+                    if (!updatedInfo.province && pob.province) updatedInfo.province = pob.province;
                   }
 
                   if (Object.keys(updatedInfo).length > 0) {
@@ -4947,25 +4463,15 @@ export default function CitizenChatPage() {
   );
 
   const handleResetMyDetailsToDemo = useCallback(() => {
-    const defaultProfile = PROFILES[role];
+    const defaultProfile = PROFILES.new_citizen;
     setApplicant(defaultProfile);
-    if (role === 'new_citizen') {
-      setSavedFiles([]);
-      setChecklistItems(createCleanChecklists());
-      setInspections([]);
-    } else {
-      const files = createInitialSavedFiles();
-      const inits = createInitialInspections();
-      setSavedFiles(files);
-      setInspections(inits);
-      setChecklistItems(
-        reconcileChecklistWithVault(createInitialChecklists(), defaultProfile, files, inits),
-      );
-    }
+    setSavedFiles([]);
+    setChecklistItems(createCleanChecklists());
+    setInspections([]);
     void fetch(`/api/citizen/details?citizenId=${encodeURIComponent(defaultProfile.id)}`, {
       method: 'DELETE',
     });
-  }, [role]);
+  }, []);
 
   const openFilePicker = (kind: 'any' | 'image' | 'pdf' = 'any') => {
     const input = fileInputRef.current;
@@ -5189,7 +4695,7 @@ export default function CitizenChatPage() {
   return (
     <AppContext.Provider value={ctxValue}>
       <div className="shell h-dvh bg-white" data-collapsed={sidebarCollapsed}>
-        {/* Left Sidebar (Exact KaagapAI structure & classes) */}
+        {/* Left Sidebar (Standard structure & classes) */}
         <aside
           className="sidebar bg-[var(--sidebar)]"
           data-mobile-open={mobileMenuOpen}
@@ -5258,6 +4764,38 @@ export default function CitizenChatPage() {
                 {(flaggedInspectionsCount > 0 || openChecklistCount > 0) && (
                   <span className="text-[12px] text-[var(--label-2)] tabular-nums">
                     {flaggedInspectionsCount + openChecklistCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                data-tour="notifications"
+                aria-current={view === 'notifications' ? 'page' : undefined}
+                onClick={() => {
+                  setView('notifications');
+                  const allIds = Array.from(new Set([...readNotificationIds, ...agencyMilestones.map((m) => m.id)]));
+                  setReadNotificationIds(allIds);
+                  try {
+                    localStorage.setItem('govguide_read_notifications', JSON.stringify(allIds));
+                  } catch {}
+                  setMobileMenuOpen(false);
+                }}
+                className={`row-btn press flex h-8 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] ${
+                  view === 'notifications' ? 'bg-[var(--fill-2)] font-medium text-[var(--fg)]' : ''
+                }`}
+              >
+                <span
+                  className={
+                    view === 'notifications' ? 'text-[var(--brand)]' : 'text-[var(--label-2)]'
+                  }
+                >
+                  {Icons.bell}
+                </span>
+                <span className="flex-1">Notifications</span>
+                {unreadMilestonesCount > 0 && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-2xs">
+                    {unreadMilestonesCount}
                   </span>
                 )}
               </button>
@@ -5355,23 +4893,23 @@ export default function CitizenChatPage() {
                     aria-expanded={open}
                     className="row-btn press flex h-auto w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left text-[14px]"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--fg)] text-[12px] font-medium text-white">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white shadow-2xs ${
+                      applicant.role === 'agency_admin' ? 'bg-blue-600' : 'bg-[var(--fg)]'
+                    }`}>
                       {authUser
                         ? (applicant.initials || 'CA')
-                        : (role === 'new_citizen' ? 'GA' : applicant.initials || 'DM')}
+                        : 'GA'}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium">
+                      <span className="block truncate text-[13px] font-semibold">
                         {authUser
                           ? (applicant.display_name || authUser.email || 'Citizen Account')
-                          : (role === 'new_citizen' ? 'Guest Account' : applicant.display_name)}
+                          : 'Guest Citizen'}
                       </span>
-                      <span className="block truncate text-[12px] text-[var(--label-2)]">
+                      <span className="block truncate text-[11px] text-[var(--label-2)]">
                         {authUser
-                          ? (authUser.email || 'Verified Account')
-                          : (role === 'new_citizen'
-                              ? 'Fresh Account (Blank)'
-                              : `${applicant.title}`)}
+                          ? (applicant.role === 'agency_admin' ? `Official Agency · ${authUser.email}` : (authUser.email || 'Verified Account'))
+                          : 'Not signed in'}
                       </span>
                     </span>
                     <span className="text-[var(--label-3)]">{Icons.chevronDown}</span>
@@ -5382,18 +4920,43 @@ export default function CitizenChatPage() {
                   <div role="menu" aria-label="Account Settings & Presets">
                     {authUser ? (
                       <div>
-                        <div className="px-2.5 py-2 border-b border-[var(--hairline)]">
-                          <p className="text-[11px] font-medium text-slate-500">Signed In As</p>
-                          <p className="text-[13px] font-semibold text-slate-900 truncate">{authUser.email}</p>
+                        <div className="px-2.5 py-2 border-b border-[var(--hairline)] bg-slate-50/50">
+                          {applicant.role === 'agency_admin' ? (
+                            <>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                                <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Government Agency</p>
+                              </div>
+                              <p className="text-[13px] font-bold text-slate-900 truncate">{applicant.display_name}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{authUser.email}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[11px] font-medium text-slate-500">Signed In As</p>
+                              <p className="text-[13px] font-semibold text-slate-900 truncate">{authUser.email}</p>
+                            </>
+                          )}
                         </div>
                         <div className="py-1">
+                          {applicant.role === 'agency_admin' && (
+                            <Link
+                              href="/agency/dashboard"
+                              onClick={close}
+                              className="flex items-center gap-2 px-2.5 py-1.5 text-[13px] font-semibold text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                            >
+                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                              </svg>
+                              <span>Agency Admin Dashboard</span>
+                            </Link>
+                          )}
                           <MenuItemRadio
                             onSelect={() => {
                               close();
                               setView('details');
                             }}
                           >
-                            Edit My Details &amp; Files
+                            {applicant.role === 'agency_admin' ? 'View Agency Profile & Services' : 'Edit My Details & Files'}
                           </MenuItemRadio>
                           <MenuItemRadio
                             onSelect={() => {
@@ -5422,76 +4985,29 @@ export default function CitizenChatPage() {
                       </div>
                     ) : (
                       <div>
-                        <p className="px-2.5 pt-1.5 pb-1 text-[12px] font-medium text-[var(--label-2)]">
-                          Guest Account &amp; Mock Presets
-                        </p>
-                        <MenuItemRadio
-                          checked={role === 'new_citizen'}
-                          onSelect={() => {
-                            setRole('new_citizen');
-                            setApplicant(PROFILES.new_citizen);
-                            setSavedFiles([]);
-                            setChecklistItems(createCleanChecklists());
-                            setInspections([]);
-                            close();
-                          }}
-                        >
-                          <span className="block font-medium">Guest Account (Fresh)</span>
-                          <span className="block text-[12px] text-[var(--label-2)]">
-                            Clean account · Zero pre-filled details
-                          </span>
-                        </MenuItemRadio>
-                        <MenuItemRadio
-                          checked={role === 'jobseeker'}
-                          onSelect={() => {
-                            setRole('jobseeker');
-                            const target = PROFILES.jobseeker;
-                            setApplicant(target);
-                            setSavedFiles(createInitialSavedFiles());
-                            setChecklistItems(createInitialChecklists());
-                            setInspections(createInitialInspections());
-                            close();
-                          }}
-                        >
-                          <span className="block font-medium">Demo: Jobseeker (Juan)</span>
-                          <span className="block text-[12px] text-[var(--label-2)]">
-                            RA 11261 · Pre-filled documents
-                          </span>
-                        </MenuItemRadio>
-                        <MenuItemRadio
-                          checked={role === 'married_applicant'}
-                          onSelect={() => {
-                            setRole('married_applicant');
-                            const target = PROFILES.married_applicant;
-                            setApplicant(target);
-                            setSavedFiles([]);
-                            setChecklistItems(createInitialChecklists());
-                            setInspections([]);
-                            close();
-                          }}
-                        >
-                          <span className="block font-medium">Demo: Married (Maria Clara)</span>
-                          <span className="block text-[12px] text-[var(--label-2)]">
-                            Renewal &amp; Civil Registry demo
-                          </span>
-                        </MenuItemRadio>
-                        <div className="my-1 h-px bg-[var(--hairline)]" aria-hidden="true" />
-                        <MenuItemRadio
-                          onSelect={() => {
-                            close();
-                            setView('details');
-                          }}
-                        >
-                          Edit My Details &amp; Files
-                        </MenuItemRadio>
-                        <MenuItemRadio
-                          onSelect={() => {
-                            close();
-                            setTourOpen(true);
-                          }}
-                        >
-                          Take the tour
-                        </MenuItemRadio>
+                        <div className="px-2.5 py-2 border-b border-[var(--hairline)]">
+                          <p className="text-[11px] font-medium text-slate-500">Account</p>
+                          <p className="text-[13px] font-semibold text-slate-900">Guest Citizen</p>
+                          <p className="text-[11px] text-slate-500">Not signed in</p>
+                        </div>
+                        <div className="py-1">
+                          <MenuItemRadio
+                            onSelect={() => {
+                              close();
+                              setView('details');
+                            }}
+                          >
+                            Edit My Details &amp; Files
+                          </MenuItemRadio>
+                          <MenuItemRadio
+                            onSelect={() => {
+                              close();
+                              setTourOpen(true);
+                            }}
+                          >
+                            Take the tour
+                          </MenuItemRadio>
+                        </div>
                         <div className="my-1 h-px bg-[var(--hairline)]" aria-hidden="true" />
                         <Link
                           href="/login"
@@ -5519,207 +5035,26 @@ export default function CitizenChatPage() {
 
         {/* Main Content Area */}
         <main className="relative flex min-w-0 flex-col overflow-hidden">
-          <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-100/80 bg-white/90 px-3 backdrop-blur-md">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <button
-                type="button"
-                className="btn-icon press md:hidden"
-                onClick={() => setMobileMenuOpen(true)}
-                aria-label="Open sidebar"
-              >
-                {Icons.menu}
-              </button>
-              <button
-                type="button"
-                className={`btn-icon press max-md:hidden ${sidebarCollapsed ? '' : 'pointer-events-none opacity-0'
-                  }`}
-                onClick={() => setSidebarCollapsed(false)}
-                aria-label="Show sidebar"
-                tabIndex={sidebarCollapsed ? 0 : -1}
-                aria-hidden={!sidebarCollapsed}
-              >
-                {Icons.sidebar}
-              </button>
-
-              {/* Intuitive Non-Tech Friendly Top View Switcher */}
-              <nav className="flex items-center gap-1 rounded-full bg-slate-100 p-0.5 border border-slate-200/80 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setView('chat')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${view === 'chat'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <span className="text-slate-700">{Icons.chat}</span>
-                  <span>Usap / Chat</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setView('details')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${view === 'details'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <span className="text-slate-700">{Icons.user}</span>
-                  <span>Aking Detalye</span>
-                  {flaggedInspectionsCount > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
-                      {flaggedInspectionsCount}
-                    </span>
-                  )}
-                </button>
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {authUser ? (
-                <div className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[11.5px] font-medium text-slate-700">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-[9px] font-bold text-white">
-                    {(applicant.initials || 'U').slice(0, 1)}
-                  </span>
-                  <span className="max-w-[110px] truncate">{applicant.first_name || applicant.display_name.split(' ')[0]}</span>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      setAuthUser(null);
-                      setApplicant(PROFILES.new_citizen);
-                      setRole('new_citizen');
-                      setSavedFiles([]);
-                      setChecklistItems(createCleanChecklists());
-                      setInspections([]);
-                    }}
-                    className="ml-0.5 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
-                    title="Sign Out"
-                    aria-label="Sign Out"
-                  >
-                    {Icons.close}
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  href="/login"
-                  className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition-colors shadow-2xs"
-                >
-                  Sign In
-                </Link>
-              )}
-
-
-              <button
-                type="button"
-                data-tour="help"
-                onClick={() => setTourOpen(true)}
-                className="btn-icon press text-[var(--fg)]"
-                aria-label="Take the tour"
-                title="Take the tour"
-              >
-                {Icons.help}
-              </button>
-
-              <Popover
-                label="Notifications"
-                placement="bottom-end"
-                className="w-[340px] max-w-[calc(100vw-24px)]"
-                trigger={({ open, toggle }) => (
-                  <button
-                    type="button"
-                    data-tour="notifications"
-                    onClick={() => {
-                      setUnreadMilestonesCount(0);
-                      toggle();
-                    }}
-                    aria-expanded={open}
-                    className="btn-icon press relative text-[var(--fg)]"
-                    aria-label="Notifications"
-                  >
-                    {Icons.bell}
-                    <span
-                      className="badge absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold text-[var(--fg)] shadow-[0_0_0_2px_#fff]"
-                      data-show={flaggedInspectionsCount > 0 || unreadMilestonesCount > 0}
-                      aria-hidden="true"
-                    >
-                      <span className="pop">{(flaggedInspectionsCount + unreadMilestonesCount) || 1}</span>
-                    </span>
-                  </button>
-                )}
-              >
-                {(close) => (
-                  <div className="max-h-[380px] overflow-y-auto">
-                    {agencyMilestones.length > 0 && (
-                      <div className="mb-2 border-b border-[var(--hairline)] pb-2">
-                        <p className="px-2.5 pt-1.5 pb-1 text-[13px] font-semibold text-blue-700">
-                          🏛️ Agency Milestone Updates
-                        </p>
-                        <ul className="grid gap-1">
-                          {agencyMilestones.map((req) => (
-                            <li key={req.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  close();
-                                  setView('tasks');
-                                }}
-                                className="row-btn flex w-full flex-col rounded-[10px] bg-slate-50 p-2 text-left hover:bg-blue-50 transition-colors"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[11px] font-bold text-blue-800">
-                                    [{req.agencyCode}] Step {req.currentStep}/5
-                                  </span>
-                                  <span className="text-[10px] text-slate-500">#{req.referenceNumber}</span>
-                                </div>
-                                <span className="mt-0.5 text-[12px] font-semibold text-slate-900 leading-tight">
-                                  {req.statusLabel}
-                                </span>
-                                {req.officerNotes && (
-                                  <span className="mt-1 text-[11px] text-slate-600 italic line-clamp-1">
-                                    &ldquo;{req.officerNotes}&rdquo;
-                                  </span>
-                                )}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <p className="px-2.5 pt-1.5 pb-1 text-[13px] font-medium">
-                      Pre-Flight Inspection Alerts
-                    </p>
-                    <ul className="grid gap-0.5">
-                      {inspections
-                        .filter((i) => i.overall_status === 'issues_found')
-                        .map((item) => (
-                          <li key={item.id}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                close();
-                                setView('details');
-                              }}
-                              className="row-btn flex w-full gap-2 rounded-[10px] px-2.5 py-2 text-left"
-                            >
-                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                              <span>
-                                <span className="block text-[13px] font-medium leading-snug">
-                                  {item.document_title}
-                                </span>
-                                <span className="mt-0.5 block text-[12px] text-[var(--label-2)]">
-                                  {item.issues[0]?.title}
-                                </span>
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-              </Popover>
-            </div>
-          </header>
+          {/* Floating Sidebar Toggle Button for Collapsed State or Mobile */}
+          {(sidebarCollapsed || !mobileMenuOpen) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                  setSidebarCollapsed(false);
+                } else {
+                  setMobileMenuOpen(true);
+                }
+              }}
+              className={`absolute top-3.5 left-3.5 z-30 h-8 w-8 items-center justify-center rounded-lg border border-slate-200/90 bg-white/90 text-slate-700 shadow-xs backdrop-blur-sm hover:bg-slate-50 transition-all ${
+                sidebarCollapsed ? 'flex' : 'md:hidden flex'
+              }`}
+              aria-label="Toggle navigation sidebar"
+              title="Toggle navigation sidebar"
+            >
+              {Icons.sidebar}
+            </button>
+          )}
 
           {/* Active View Router */}
           {isMyDetailsActive && (
@@ -5755,101 +5090,78 @@ export default function CitizenChatPage() {
 
           {view === 'log' && <AuditLogView logs={auditLogs} />}
 
+          {view === 'notifications' && (
+            <GmailNotificationsView
+              agencyMilestones={agencyMilestones}
+              readNotificationIds={readNotificationIds}
+              onMarkAsRead={(id: string) => {
+                setReadNotificationIds((prev) => {
+                  if (prev.includes(id)) return prev;
+                  const next = [...prev, id];
+                  try {
+                    localStorage.setItem('govguide_read_notifications', JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }}
+              onMarkAllAsRead={() => {
+                const allIds = Array.from(new Set([...readNotificationIds, ...agencyMilestones.map((m) => m.id)]));
+                setReadNotificationIds(allIds);
+                try {
+                  localStorage.setItem('govguide_read_notifications', JSON.stringify(allIds));
+                } catch {}
+              }}
+              inspections={inspections}
+              applicantName={applicant.display_name}
+              onAskInChat={(prompt) => {
+                preventBottomScrollRef.current = false;
+                setView('chat');
+                void sendTurn(prompt, undefined, undefined, true);
+              }}
+              onViewTasks={() => setView('tasks')}
+              onViewDetails={() => setView('details')}
+              onBackToChat={() => setView('chat')}
+            />
+          )}
+
           {view === 'chat' && (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               {/* Main Chat Column */}
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {/* Welcoming Citizen Landing (on Empty Chat) */}
                 {isEmptyChat && (
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-6 text-center select-none overflow-y-auto">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-8 text-center select-none overflow-y-auto">
                     <div className="relative mb-3 flex items-center justify-center">
                       <div className="absolute -inset-2 rounded-full bg-slate-200/50 blur-lg" aria-hidden="true" />
                       <LogoMark size={56} priority />
                     </div>
 
-
-
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 max-w-xl">
-                      {!applicant.display_name
-                        ? 'Walang balik-pila.'
+                      {applicant.role === 'agency_admin'
+                        ? applicant.display_name
+                        : !applicant.display_name
+                        ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat.'
                         : `Kumusta, ${applicant.first_name || applicant.display_name.split(' ')[0]}!`}
                     </h1>
-
-                    {/* 3 Simple Action Cards for Non-Tech Citizens */}
-                    <div className="mt-5 grid w-full max-w-xl grid-cols-1 sm:grid-cols-3 gap-2 text-left">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void sendTurn(
-                            'Ano ang mga opisyal na requirements, bayarin (₱950 Regular vs ₱1,200 Expedited), at consular appointment procedures para sa DFA Passport application at renewal?',
-                            [],
-                            'DFA_PASSPORT',
-                          );
-                        }}
-                        className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300 hover:shadow-xs active:scale-98 transition-all"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                            {Icons.passport}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">DFA Passport</span>
-                        </div>
-                        <span className="text-slate-400 group-hover:text-slate-600 transition-colors">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void sendTurn(
-                            'How do I order my PSA Birth Certificate via PSAHelpline.ph for nationwide doorstep delivery, and what are the fees and receiving requirements?',
-                            [],
-                            'PSA_HELPLINE',
-                          );
-                        }}
-                        className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300 hover:shadow-xs active:scale-98 transition-all"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                            {Icons.doc}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">PSA Helpline</span>
-                        </div>
-                        <span className="text-slate-400 group-hover:text-slate-600 transition-colors">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void loadDemoAndSend(
-                            '/demo/expired-postal-id.png',
-                            'expired-postal-id.png',
-                            'image/png',
-                            'Here is my Postal ID for my government application. Please check if there is any expired, mismatched, or missing information.',
-                          );
-                        }}
-                        className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300 hover:shadow-xs active:scale-98 transition-all"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                            {Icons.upload}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">I-check ang ID</span>
-                        </div>
-                        <span className="text-slate-400 group-hover:text-slate-600 transition-colors">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </span>
-                      </button>
-                    </div>
+                    <p className="mt-2 text-[13px] text-slate-500 max-w-md">
+                      {applicant.role === 'agency_admin'
+                        ? 'Opisyal na Portal ng Ahensya · Subaybayan ang mga transaksyon, counter requirements, at Citizen’s Charter.'
+                        : !applicant.display_name
+                        ? 'Punan ang inyong impormasyon sa My Details bago makipag-chat.'
+                        : 'Mabilis at opisyal na gabay sa mga serbisyo at dokumento ng gobyerno. Magtanong o pumili sa ibaba.'}
+                    </p>
+                    {!applicant.display_name && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setView('details')}
+                          className="press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 transition-colors"
+                        >
+                          {Icons.user}
+                          <span>Punan ang My Details</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -6076,7 +5388,56 @@ export default function CitizenChatPage() {
                   </div>
                 )}
 
-                {/* Composer (Exact KaagapAI `.composer` card - slim) */}
+                {/* 4 Shortcut Pills on Empty Chat (at the bottom part above composer) */}
+                {isEmptyChat && (
+                  <div
+                    data-tour="pills"
+                    className="mx-auto mb-2.5 grid w-full max-w-[760px] shrink-0 grid-cols-2 gap-2 px-4 sm:grid-cols-4"
+                  >
+                    {SHORTCUT_PILLS.map((pill) => (
+                      <button
+                        key={pill.id}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (pill.id === 'nbi_checklist') {
+                            void sendTurn(
+                              'Prepare my NBI Clearance requirements checklist and tell me what to watch out for.',
+                              [],
+                              'NBI_CLEARANCE',
+                            );
+                          } else if (pill.id === 'psa_helpline') {
+                            void sendTurn(
+                              'How do I order my PSA Birth Certificate via PSAHelpline.ph for nationwide doorstep delivery, and what are the fees and receiving requirements?',
+                              [],
+                              'PSA_HELPLINE',
+                            );
+                          } else if (pill.id === 'demo_expired_id') {
+                            void loadDemoAndSend(
+                              '/demo/expired-postal-id.png',
+                              'expired-postal-id.png',
+                              'image/png',
+                              'Here is my Postal ID for my government application. Please check if there is any expired, mismatched, or missing information.',
+                            );
+                          } else if (pill.id === 'demo_brgy') {
+                            void loadDemoAndSend(
+                              '/demo/incomplete-brgy-cert.png',
+                              'incomplete-brgy-cert.png',
+                              'image/png',
+                              'Inspect my Barangay Certificate for missing seal, signature, or expiry.',
+                            );
+                          }
+                        }}
+                        className="pill press row-btn flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white px-2.5 text-[12px] font-medium shadow-[0_0_0_1px_var(--hairline),0_1px_2px_rgba(0,0,0,0.04)] hover:bg-slate-50 transition-all disabled:opacity-40 [&_svg]:size-3.5"
+                      >
+                        <span className="shrink-0 text-[var(--brand)]">{pill.icon}</span>
+                        <span className="truncate">{pill.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Composer (`.composer` card - slim) */}
                 <div ref={composerWrapRef} className={`mx-auto w-full max-w-[760px] shrink-0 px-4 ${!isEmptyChat ? 'pb-3' : ''}`}>
                   <div data-tour="composer" className="composer rounded-[16px] bg-white">
                     <div className="flex items-center gap-1.5 px-3.5 pt-2 text-[12px]">
@@ -6144,7 +5505,11 @@ export default function CitizenChatPage() {
                           void sendTurn();
                         }
                       }}
-                      placeholder="Magtanong tungkol sa serbisyo ng gobyerno o mag-upload ng ID para masuri..."
+                      placeholder={
+                        !applicant.display_name || applicant.role === 'new_citizen'
+                          ? 'Mangyaring punan muna ang form sa My Details bago makipag-chat...'
+                          : 'Magtanong tungkol sa serbisyo ng gobyerno o mag-upload ng ID para masuri...'
+                      }
                       className="block min-h-[38px] max-h-[160px] w-full resize-none bg-transparent px-3.5 pt-1 pb-1 text-[14px] leading-relaxed outline-none placeholder:text-[13px] placeholder:text-[var(--label-3)]"
                     />
 
@@ -6226,7 +5591,7 @@ export default function CitizenChatPage() {
                                   '/demo/incomplete-brgy-cert.png',
                                   'incomplete-brgy-cert.png',
                                   'image/png',
-                                  'Inspect my Barangay Jobseeker Certificate for missing seal, signature, or expiry.',
+                                  'Inspect my Barangay Certificate for missing seal, signature, or expiry.',
                                 );
                               }}
                               className="row-btn flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px]"
@@ -6320,54 +5685,6 @@ export default function CitizenChatPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* 4 Shortcut Pills on Empty Chat (slim, along with the chat box at the bottom part) */}
-                {isEmptyChat && (
-                  <div
-                    data-tour="pills"
-                    className="mx-auto grid w-full max-w-[760px] shrink-0 grid-cols-2 gap-2 px-4 pt-2.5 pb-4 sm:grid-cols-4"
-                  >
-                    {SHORTCUT_PILLS.map((pill) => (
-                      <button
-                        key={pill.id}
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          if (pill.id === 'dfa_passport') {
-                            void sendTurn(
-                              'Ano ang mga opisyal na requirements, bayarin (₱950 Regular vs ₱1,200 Expedited), at consular appointment procedures para sa DFA Passport application at renewal?',
-                              [],
-                              'DFA_PASSPORT',
-                            );
-                          } else if (pill.id === 'dpwh_reviews') {
-                            void sendTurn(
-                              'Ipakita ang DPWH nationwide infrastructure projects tracker, progress status, at mga citizen Google reviews para sa mga kalsada at tulay.',
-                              [],
-                              'DPWH_PROJECTS',
-                            );
-                          } else if (pill.id === 'psa_helpline') {
-                            void sendTurn(
-                              'How do I order my PSA Birth Certificate via PSAHelpline.ph for nationwide doorstep delivery, and what are the fees and receiving requirements?',
-                              [],
-                              'PSA_HELPLINE',
-                            );
-                          } else if (pill.id === 'demo_expired_id') {
-                            void loadDemoAndSend(
-                              '/demo/expired-postal-id.png',
-                              'expired-postal-id.png',
-                              'image/png',
-                              'Here is my Postal ID for my government application. Please check if there is any expired, mismatched, or missing information.',
-                            );
-                          }
-                        }}
-                        className="pill press row-btn flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white px-2.5 text-[12px] font-medium shadow-[0_0_0_1px_var(--hairline),0_1px_2px_rgba(0,0,0,0.04)] disabled:opacity-40 [&_svg]:size-3"
-                      >
-                        <span className="shrink-0 text-[var(--brand)]">{pill.icon}</span>
-                        <span className="truncate">{pill.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
 
@@ -6418,7 +5735,7 @@ export default function CitizenChatPage() {
         </div>
       )}
 
-      {/* Delete Chat Confirmation Dialog (Exact KaagapAI `ea` dialog) */}
+      {/* Delete Chat Confirmation Dialog (`ea` dialog) */}
       <div
         className="dialog-root fixed inset-0 z-[80] flex items-center justify-center p-6"
         data-open={deleteDialogThread !== null}

@@ -1,10 +1,11 @@
 /**
  * GovGuide PH — Background Service Worker (Manifest V3)
- * Manages Context Menus, Vault Sync, Notifications & Agency API Dispatch
+ * Manages Auth (popup login + web chat session sync), Context Menus, Vault Sync,
+ * Notifications & Agency API Dispatch
  */
 
 import { loadLocalVault, saveLocalVault, getSession, saveSession, syncVaultFromGovGuide, applicantToVault } from '../lib/vault';
-import type { ExtensionMessage } from '../types';
+import type { ExtensionMessage, ExtensionSession, UserRole } from '../types';
 
 chrome.runtime.onInstalled.addListener(() => {
   setupContextMenus();
@@ -14,7 +15,7 @@ function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'govguide_root',
-      title: '🇵🇭 GovGuide PH Copilot',
+      title: 'GovGuide PH',
       contexts: ['editable'],
     });
 
@@ -94,6 +95,171 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+interface AuthUserPayload {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  agencyCode?: string;
+  agencyName?: string;
+}
+
+interface AuthTokensPayload {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: number;
+}
+
+function broadcastSession(session: ExtensionSession) {
+  try {
+    chrome.runtime.sendMessage({ type: 'SESSION_UPDATED', session: publicSession(session) }, () => {
+      void chrome.runtime.lastError; // popup may be closed
+    });
+  } catch {
+    // Safe ignore
+  }
+}
+
+/** Strips tokens before handing the session to UI contexts. */
+function publicSession(session: ExtensionSession): ExtensionSession {
+  const { accessToken: _a, refreshToken: _r, ...rest } = session;
+  return rest;
+}
+
+async function applyAuth(
+  user: AuthUserPayload,
+  tokens: AuthTokensPayload,
+  source: 'extension' | 'web'
+): Promise<ExtensionSession> {
+  const session = await saveSession({
+    isAuthenticated: true,
+    authSource: source,
+    userRole: user.role,
+    userId: user.userId,
+    email: user.email,
+    fullName: user.fullName,
+    officerName: user.fullName,
+    agencyCode: user.agencyCode,
+    agencyName: user.agencyName,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: tokens.expiresAt,
+  });
+  broadcastSession(session);
+  return session;
+}
+
+async function clearAuth(): Promise<ExtensionSession> {
+  const session = await saveSession({
+    isAuthenticated: false,
+    authSource: undefined,
+    userRole: 'guest',
+    userId: undefined,
+    email: undefined,
+    fullName: undefined,
+    officerName: undefined,
+    agencyCode: undefined,
+    agencyName: undefined,
+    accessToken: undefined,
+    refreshToken: undefined,
+    expiresAt: undefined,
+  });
+  broadcastSession(session);
+  return session;
+}
+
+async function tryRefresh(session: ExtensionSession): Promise<ExtensionSession | null> {
+  if (!session.refreshToken) return null;
+  try {
+    const res = await fetch(`${session.apiBaseUrl}/api/extension/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: session.refreshToken }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) return null;
+    return await applyAuth(json.user, json.tokens, session.authSource || 'extension');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch against the GovGuide API with the stored bearer token.
+ * Retries once after refreshing an expired token; signs out if refresh fails.
+ */
+async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  let session = await getSession();
+  if (!session.isAuthenticated || !session.accessToken) {
+    throw new Error('Not signed in.');
+  }
+
+  const doFetch = (token: string) =>
+    fetch(`${session.apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+  let res = await doFetch(session.accessToken);
+  if (res.status === 401) {
+    const refreshed = await tryRefresh(session);
+    if (!refreshed || !refreshed.accessToken) {
+      await clearAuth();
+      throw new Error('Session expired. Please sign in again.');
+    }
+    session = refreshed;
+    res = await doFetch(refreshed.accessToken);
+  }
+  return res;
+}
+
+let webSyncInFlight: string | null = null;
+
+async function syncWebAuth(payload: { accessToken?: string; refreshToken?: string; signedOut?: boolean }) {
+  const session = await getSession();
+
+  if (payload.signedOut || !payload.accessToken) {
+    // Web chat signed out: mirror sign-out only for sessions that came from the web with an access token
+    if (session.isAuthenticated && session.authSource === 'web' && session.accessToken) {
+      return { session: publicSession(await clearAuth()) };
+    }
+    return { session: publicSession(session) };
+  }
+
+  if (session.isAuthenticated && session.accessToken === payload.accessToken) {
+    return { session: publicSession(session) };
+  }
+  if (webSyncInFlight === payload.accessToken) {
+    return { session: publicSession(session) };
+  }
+
+  webSyncInFlight = payload.accessToken;
+  try {
+    const res = await fetch(`${session.apiBaseUrl}/api/extension/auth`, {
+      headers: { Authorization: `Bearer ${payload.accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      return { session: publicSession(session), error: json.error || 'Web session could not be verified' };
+    }
+    const updated = await applyAuth(
+      json.user,
+      { accessToken: payload.accessToken, refreshToken: payload.refreshToken || '' },
+      'web'
+    );
+    return { session: publicSession(updated) };
+  } finally {
+    webSyncInFlight = null;
+  }
+}
+
 // Message Router
 chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
   handleMessage(msg).then(sendResponse).catch((err) => {
@@ -130,27 +296,130 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
       return { success: true };
     }
     case 'PUSH_VAULT_FROM_WEB': {
-      const { applicant, citizenId } = msg.payload;
+      const { applicant, citizenId, apiBaseUrl } = msg.payload;
       const currentVault = await loadLocalVault();
       const updatedVault = applicantToVault(applicant, currentVault);
       await saveLocalVault(updatedVault);
       const effectiveId = citizenId || applicant?.id || 'active';
-      await saveSession({
+      const existingSession = await getSession();
+      const hasApplicantIdentity =
+        Boolean(applicant?.display_name?.trim()) ||
+        Boolean(applicant?.first_name?.trim()) ||
+        Boolean(applicant?.email?.trim()) ||
+        (effectiveId !== 'active' && effectiveId !== 'e1000000-0000-4000-8000-000000000003');
+
+      const sessionPatch: Partial<ExtensionSession> = {
         citizenId: effectiveId,
         lastSyncedAt: new Date().toISOString(),
-      });
+      };
+      if (apiBaseUrl) {
+        sessionPatch.apiBaseUrl = apiBaseUrl;
+      }
+
+      // If the user is actively using a GovGuide Chat session and the extension is not signed in yet,
+      // automatically sync their citizen session into the extension.
+      if (!existingSession.isAuthenticated && hasApplicantIdentity) {
+        sessionPatch.isAuthenticated = true;
+        sessionPatch.authSource = 'web';
+        sessionPatch.userRole = 'citizen';
+        sessionPatch.userId = effectiveId;
+        sessionPatch.email = applicant?.email || 'citizen@govguide.ph';
+        sessionPatch.fullName =
+          applicant?.display_name ||
+          [applicant?.first_name, applicant?.last_name].filter(Boolean).join(' ') ||
+          'Citizen Session';
+      }
+
+      const nextSession = await saveSession(sessionPatch);
+      if (!existingSession.isAuthenticated && nextSession.isAuthenticated) {
+        broadcastSession(nextSession);
+      }
       try {
         chrome.runtime.sendMessage({ type: 'VAULT_UPDATED', vault: updatedVault });
       } catch {}
       return { success: true, vault: updatedVault };
     }
     case 'GET_SESSION': {
-      const session = await getSession();
-      return { session };
+      let session = await getSession();
+      if (!session.isAuthenticated && session.isOnlineSyncEnabled) {
+        try {
+          const targetId =
+            session.citizenId && session.citizenId !== '967760de-3912-5aaf-8ce9-48b2a8dd55f0'
+              ? session.citizenId
+              : 'active';
+          const res = await fetch(
+            `${session.apiBaseUrl}/api/citizen/details?citizenId=${encodeURIComponent(targetId)}`
+          );
+          if (res.ok) {
+            const json = await res.json();
+            const app = json?.applicant;
+            const hasActiveIdentity =
+              json?.ok &&
+              app &&
+              (json.source === 'active_session_cache' ||
+                json.source === 'supabase_profile' ||
+                Boolean(app.display_name?.trim()) ||
+                Boolean(app.first_name?.trim()) ||
+                Boolean(app.email?.trim()));
+
+            if (hasActiveIdentity) {
+              const currentVault = await loadLocalVault();
+              const syncedVault = applicantToVault(app, currentVault);
+              await saveLocalVault(syncedVault);
+              session = await saveSession({
+                isAuthenticated: true,
+                authSource: 'web',
+                userRole: 'citizen',
+                userId: app.id || targetId,
+                citizenId: app.id || targetId,
+                email: app.email || 'citizen@govguide.ph',
+                fullName:
+                  app.display_name ||
+                  [app.first_name, app.last_name].filter(Boolean).join(' ') ||
+                  'Citizen Session',
+                lastSyncedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } catch {
+          // Offline or no active chat session
+        }
+      }
+      return { session: publicSession(session) };
     }
     case 'SET_SESSION': {
-      const updated = await saveSession(msg.payload);
-      return { session: updated };
+      // Auth fields can only be changed through LOGIN / LOGOUT / SYNC_WEB_AUTH
+      const {
+        isAuthenticated: _i,
+        userRole: _u,
+        accessToken: _a,
+        refreshToken: _r,
+        authSource: _s,
+        ...safe
+      } = msg.payload;
+      const updated = await saveSession(safe);
+      return { session: publicSession(updated) };
+    }
+    case 'LOGIN': {
+      const session = await getSession();
+      const res = await fetch(`${session.apiBaseUrl}/api/extension/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: msg.payload.email, password: msg.payload.password }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        return { success: false, error: json.error || 'Invalid email or password.' };
+      }
+      const updated = await applyAuth(json.user, json.tokens, 'extension');
+      return { success: true, session: publicSession(updated) };
+    }
+    case 'LOGOUT': {
+      const updated = await clearAuth();
+      return { success: true, session: publicSession(updated) };
+    }
+    case 'SYNC_WEB_AUTH': {
+      return await syncWebAuth(msg.payload);
     }
     case 'SYNC_FROM_GOVGUIDE': {
       const session = await getSession();
@@ -161,27 +430,31 @@ async function handleMessage(msg: ExtensionMessage): Promise<any> {
       } catch {}
       return { success: true, vault: synced };
     }
+    case 'FETCH_AGENCY_REQUESTS': {
+      const q = msg.payload?.q?.trim() || '';
+      const res = await authedFetch(`/api/agency/requests${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to load agency requests');
+      }
+      return { success: true, data: json.data };
+    }
     case 'UPDATE_REQUEST_STATUS': {
-      const session = await getSession();
-      const res = await fetch(`${session.apiBaseUrl}/api/agency/requests`, {
+      const res = await authedFetch('/api/agency/requests', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-agency-role': 'counter_officer',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(msg.payload),
       });
       const json = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !json.success) {
         throw new Error(json.error || 'Failed to update agency request status');
       }
 
-      // Notify citizen/officer via Chrome Notification
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icons/icon-128.png',
         title: 'GovGuide Agency Bridge',
-        message: `Status updated to '${msg.payload.statusLabel}' for ${msg.payload.requestId}`,
+        message: `${msg.payload.requestId} updated: ${json.data?.statusLabel || 'Saved'}`,
       });
 
       return { success: true, data: json.data };

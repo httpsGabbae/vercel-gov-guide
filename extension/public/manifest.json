@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "GovGuide PH — Bilis-Pila Copilot & Counter Bridge",
+  "name": "GovGuide PH — Bilis-Pila & Counter Bridge",
   "version": "1.0.0",
   "description": "Smart Philippine government portal autofill & real-time Citizen Charter application status updates.",
   "permissions": [
@@ -14,7 +14,10 @@
     "https://*.gov.ph/*",
     "https://*.psahelpline.ph/*",
     "https://*.psaonline.ph/*",
-    "http://localhost:*/*"
+    "https://*.psaserbilis.com.ph/*",
+    "https://*.serbilis.com.ph/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -23,7 +26,7 @@
       "48": "icons/icon-48.png",
       "128": "icons/icon-128.png"
     },
-    "default_title": "GovGuide PH Copilot & Agency Bridge"
+    "default_title": "GovGuide PH"
   },
   "background": {
     "service_worker": "background.js",
@@ -46,7 +49,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "assets/*"],
+      "resources": ["icons/*", "assets/*", "logo.png"],
       "matches": ["<all_urls>"]
     }
   ]

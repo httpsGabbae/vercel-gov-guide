@@ -113,7 +113,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Offshore Marine Pier Piling & Cofferdam Works', date: '2026-10', completed: false },
       { label: 'Cable-Stayed Pylon Erection & Deck Segment Launching', date: '2028-04', completed: false },
     ],
-    lastUpdated: '2026-10-25',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-002',
@@ -143,7 +143,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Tunnel Mechanical, Ventilation, Lighting & Fire Safety Systems', date: '2026-11', completed: false },
       { label: 'Final Asphalt Paving & Intelligent Traffic System Commissioning', date: '2027-05', completed: false },
     ],
-    lastUpdated: '2026-10-28',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-003',
@@ -173,7 +173,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Pakiputan Strait Main Pylon Erection', date: '2026-09', completed: true },
       { label: 'Cantilever Box Girder Deck Closure', date: '2027-06', completed: false },
     ],
-    lastUpdated: '2026-10-27',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-004',
@@ -203,7 +203,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Manggahan Control Gate & Rosario Weir Automation', date: '2026-08', completed: true },
       { label: 'Esplanade Linear Park & Floodwall Finishing', date: '2027-02', completed: false },
     ],
-    lastUpdated: '2026-10-29',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-005',
@@ -233,7 +233,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Iloilo Strait Marine Bored Piling Works', date: '2026-12', completed: false },
       { label: 'Main Span Superstructure Assembly', date: '2028-09', completed: false },
     ],
-    lastUpdated: '2026-10-26',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-006',
@@ -263,7 +263,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Mactan Channel Main Steel Truss Erection', date: '2027-08', completed: false },
       { label: 'Airport Direct Ramp & Toll-Free Opening', date: '2028-11', completed: false },
     ],
-    lastUpdated: '2026-10-24',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-007',
@@ -293,7 +293,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Talavera–Llanera Concrete Pavement & Guardrails', date: '2026-09', completed: true },
       { label: 'Final Road Markings, Solar Streetlights & Safety Audit', date: '2026-12', completed: false },
     ],
-    lastUpdated: '2026-10-29',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-008',
@@ -323,7 +323,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Tunnel Boring & NATM Excavation (6.1 km Twin Tubes)', date: '2028-10', completed: false },
       { label: 'Bridge Viaducts & Final Pavement', date: '2030-01', completed: false },
     ],
-    lastUpdated: '2026-10-23',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-009',
@@ -353,7 +353,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Alcala Flood Control Spur Dikes & Pumping Stations', date: '2026-10', completed: true },
       { label: 'Telemetry Early Warning Sensors & Dike Service Road', date: '2027-03', completed: false },
     ],
-    lastUpdated: '2026-10-28',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-010',
@@ -383,7 +383,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Patalon West Coast Junction Concrete Paving', date: '2026-08', completed: true },
       { label: 'Slope Protection, Drainage & Solar Stud Installation', date: '2026-12', completed: false },
     ],
-    lastUpdated: '2026-10-29',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-011',
@@ -413,7 +413,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Matling & Simuay River Bridge Retrofitting', date: '2026-11', completed: false },
       { label: 'Roadside Safety Barriers & Solar Lighting', date: '2027-07', completed: false },
     ],
-    lastUpdated: '2026-10-26',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-012',
@@ -443,7 +443,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: 'Cleanroom Operating Theaters & Medical Gas Piping', date: '2026-09', completed: true },
       { label: 'Final MEPFS Testing & DOH Turnover', date: '2027-02', completed: false },
     ],
-    lastUpdated: '2026-10-29',
+    lastUpdated: '2026-11-03',
   },
   {
     id: 'dpwh-proj-013',
@@ -473,7 +473,7 @@ export const INITIAL_DPWH_PROJECTS: DpwhProject[] = [
       { label: '4-Lane Concrete Roadway Paving & Drainage Channels', date: '2026-11', completed: false },
       { label: 'Highway Lighting & Traffic Safety Barrier Commissioning', date: '2027-07', completed: false },
     ],
-    lastUpdated: '2026-10-28',
+    lastUpdated: '2026-11-03',
   },
 ];
 

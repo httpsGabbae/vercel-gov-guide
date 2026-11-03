@@ -8,6 +8,47 @@ import type { CitizenVaultData, ExtensionSession } from '../types';
 export const STORAGE_VAULT_KEY = 'govguide_citizen_vault_encrypted';
 export const STORAGE_SESSION_KEY = 'govguide_extension_session';
 
+export const EMPTY_VAULT_DATA: CitizenVaultData = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  suffix: '',
+  gender: 'MALE',
+  dateOfBirth: '',
+  placeOfBirth: '',
+  civilStatus: 'SINGLE',
+  nationality: 'FILIPINO',
+
+  fatherFullName: '',
+  fatherFirstName: '',
+  fatherMiddleName: '',
+  fatherLastName: '',
+  fatherSuffix: '',
+
+  motherMaidenFirstName: '',
+  motherMaidenMiddleName: '',
+  motherMaidenLastName: '',
+  motherMaidenSuffix: '',
+
+  mobileNumber: '',
+  emailAddress: '',
+  landline: '',
+
+  region: '',
+  province: '',
+  cityMunicipality: '',
+  barangay: '',
+  streetHouseNumber: '',
+  zipCode: '',
+
+  philsysId: '',
+  tin: '',
+  sssNumber: '',
+  philhealthNumber: '',
+  pagibigMid: '',
+  passportNumber: '',
+};
+
 export const DEFAULT_VAULT_DATA: CitizenVaultData = {
   firstName: 'Juan',
   middleName: 'Santos',
@@ -50,10 +91,9 @@ export const DEFAULT_VAULT_DATA: CitizenVaultData = {
 };
 
 export const DEFAULT_SESSION: ExtensionSession = {
-  userRole: 'citizen',
+  userRole: 'guest',
+  isAuthenticated: false,
   citizenId: 'active',
-  officerName: 'Consular Officer Maria Teresa Gomez',
-  agencyCode: 'DFA',
   apiBaseUrl: 'http://localhost:3000',
   isOnlineSyncEnabled: true,
 };
@@ -90,10 +130,10 @@ export async function loadLocalVault(pin?: string): Promise<CitizenVaultData> {
           resolve(decrypted);
           return;
         } catch {
-          // If decryption fails, fallback to defaults
+          // If decryption fails, fallback
         }
       }
-      resolve(DEFAULT_VAULT_DATA);
+      resolve(EMPTY_VAULT_DATA);
     });
   });
 }
@@ -109,18 +149,20 @@ export async function saveLocalVault(data: CitizenVaultData, pin?: string): Prom
 
 /**
  * Converts an ApplicantProfile or partial object to CitizenVaultData cleanly
+ * accurately preserving details gathered from My Details without polluting with fake data
  */
 export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): CitizenVaultData {
-  const base = fallbackVault || DEFAULT_VAULT_DATA;
-  if (!a || typeof a !== 'object') return base;
+  if (!a || typeof a !== 'object') {
+    return fallbackVault || EMPTY_VAULT_DATA;
+  }
 
   // Derive name parts
-  let fn = a.first_name || '';
-  let mn = a.middle_name || '';
-  let ln = a.last_name || '';
-  let suf = a.suffix || '';
+  let fn = (a.first_name || '').trim();
+  let mn = (a.middle_name || '').trim();
+  let ln = (a.last_name || '').trim();
+  let suf = (a.suffix || '').trim();
 
-  if (!fn && a.display_name && a.display_name.trim()) {
+  if (!fn && !ln && a.display_name && a.display_name.trim()) {
     const rawParts = a.display_name.trim().split(/\s+/);
     if (rawParts.length === 1) {
       fn = rawParts[0];
@@ -135,13 +177,13 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
   }
 
   // Derive father's name parts
-  let fFn = a.father_first_name || '';
-  let fMn = a.father_middle_name || '';
-  let fLn = a.father_last_name || '';
-  let fSuf = a.father_suffix || '';
-  const fFull = a.father_name || '';
-  if (!fFn && fFull && fFull.trim()) {
-    const parts = fFull.trim().split(/\s+/);
+  let fFn = (a.father_first_name || '').trim();
+  let fMn = (a.father_middle_name || '').trim();
+  let fLn = (a.father_last_name || '').trim();
+  let fSuf = (a.father_suffix || '').trim();
+  const fFull = (a.father_name || '').trim();
+  if (!fFn && !fLn && fFull) {
+    const parts = fFull.split(/\s+/);
     if (parts.length === 1) {
       fFn = parts[0];
     } else if (parts.length === 2) {
@@ -155,13 +197,13 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
   }
 
   // Derive mother's maiden name parts
-  let mFn = a.mother_first_name || '';
-  let mMn = a.mother_middle_name || '';
-  let mLn = a.mother_last_name || a.maiden_name || '';
-  let mSuf = a.mother_suffix || '';
-  const mFull = a.mother_maiden_name || '';
-  if (!mFn && mFull && mFull.trim()) {
-    const parts = mFull.trim().split(/\s+/);
+  let mFn = (a.mother_first_name || '').trim();
+  let mMn = (a.mother_middle_name || '').trim();
+  let mLn = (a.mother_last_name || a.maiden_name || '').trim();
+  let mSuf = (a.mother_suffix || '').trim();
+  const mFull = (a.mother_maiden_name || '').trim();
+  if (!mFn && !mLn && mFull) {
+    const parts = mFull.split(/\s+/);
     if (parts.length === 1) {
       mFn = parts[0];
     } else if (parts.length === 2) {
@@ -174,45 +216,48 @@ export function applicantToVault(a: any, fallbackVault?: CitizenVaultData): Citi
     }
   }
 
+  const fb = fallbackVault || EMPTY_VAULT_DATA;
+
   return {
-    firstName: fn || base.firstName,
-    middleName: mn || base.middleName,
-    lastName: ln || base.lastName,
-    suffix: suf || base.suffix,
-    gender: a.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
-    dateOfBirth: a.birth_date || a.date_of_birth || base.dateOfBirth,
-    placeOfBirth: a.place_of_birth || (a.city ? `${a.city}, Philippines` : base.placeOfBirth),
-    civilStatus: (a.civil_status?.toUpperCase() as any) || base.civilStatus,
-    nationality: a.nationality || 'FILIPINO',
+    firstName: fn || (fb.firstName || ''),
+    middleName: mn || (fb.middleName || ''),
+    lastName: ln || (fb.lastName || ''),
+    suffix: suf || (fb.suffix || ''),
+    gender: a.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : (a.gender?.toUpperCase() === 'OTHER' ? 'OTHER' : 'MALE'),
+    dateOfBirth: a.birth_date || a.date_of_birth || (fb.dateOfBirth || ''),
+    placeOfBirth: a.place_of_birth || (a.city ? `${a.city}, Philippines` : (fb.placeOfBirth || '')),
+    civilStatus: (a.civil_status?.toUpperCase() as any) || (fb.civilStatus || 'SINGLE'),
+    nationality: a.nationality || (fb.nationality || 'FILIPINO'),
 
-    fatherFullName: fFull || [fFn, fMn, fLn, fSuf].filter(Boolean).join(' ') || base.fatherFullName,
-    fatherFirstName: fFn || base.fatherFirstName,
-    fatherMiddleName: fMn || base.fatherMiddleName,
-    fatherLastName: fLn || base.fatherLastName,
-    fatherSuffix: fSuf || base.fatherSuffix,
+    fatherFullName: fFull || [fFn, fMn, fLn, fSuf].filter(Boolean).join(' ') || (fb.fatherFullName || ''),
+    fatherFirstName: fFn || (fb.fatherFirstName || ''),
+    fatherMiddleName: fMn || (fb.fatherMiddleName || ''),
+    fatherLastName: fLn || (fb.fatherLastName || ''),
+    fatherSuffix: fSuf || (fb.fatherSuffix || ''),
 
-    motherMaidenFirstName: mFn || base.motherMaidenFirstName,
-    motherMaidenMiddleName: mMn || base.motherMaidenMiddleName,
-    motherMaidenLastName: mLn || base.motherMaidenLastName,
-    motherMaidenSuffix: mSuf || base.motherMaidenSuffix,
+    motherMaidenFirstName: mFn || (fb.motherMaidenFirstName || ''),
+    motherMaidenMiddleName: mMn || (fb.motherMaidenMiddleName || ''),
+    motherMaidenLastName: mLn || (fb.motherMaidenLastName || ''),
+    motherMaidenSuffix: mSuf || (fb.motherMaidenSuffix || ''),
 
-    mobileNumber: a.contact_number || a.phone || base.mobileNumber,
-    emailAddress: a.email || base.emailAddress,
-    landline: a.landline || base.landline,
+    mobileNumber: a.phone || a.mobile || a.mobile_number || a.contact_number || (fb.mobileNumber || ''),
+    emailAddress: a.email || (fb.emailAddress || ''),
+    landline: a.landline || (fb.landline || ''),
 
-    region: a.region || base.region,
-    province: a.province || base.province,
-    cityMunicipality: a.city || base.cityMunicipality,
-    barangay: a.barangay || base.barangay,
-    streetHouseNumber: a.street_address || a.residential_address || base.streetHouseNumber,
-    zipCode: a.zip_code || base.zipCode,
+    region: a.region || (fb.region || ''),
+    province: a.province || (fb.province || ''),
+    cityMunicipality: a.city || (fb.cityMunicipality || ''),
+    barangay: a.barangay || (fb.barangay || ''),
+    streetHouseNumber: a.street_address || a.residential_address || (fb.streetHouseNumber || ''),
+    zipCode: a.zip_code || (fb.zipCode || ''),
 
-    philsysId: a.philsys_id || a.philsys_card_number || base.philsysId,
-    tin: a.tin || a.tin_number || base.tin,
-    sssNumber: a.sss_number || base.sssNumber,
-    philhealthNumber: a.philhealth_number || base.philhealthNumber,
-    pagibigMid: a.pagibig_number || base.pagibigMid,
-    passportNumber: a.passport_number || base.passportNumber,
+    philsysId: a.philsys_id || a.philsys_card_number || (fb.philsysId || ''),
+    tin: a.tin || a.tin_number || (fb.tin || ''),
+    sssNumber: a.sss_number || (fb.sssNumber || ''),
+    philhealthNumber: a.philhealth_number || (fb.philhealthNumber || ''),
+    pagibigMid: a.pagibig_number || a.pagibigMid || (fb.pagibigMid || ''),
+    passportNumber: a.passport_number || a.passportNumber || (fb.passportNumber || ''),
+    relationshipToOwner: a.relationship || (fb as any).relationshipToOwner || 'Self',
   };
 }
 

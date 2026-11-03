@@ -65,25 +65,32 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
 
         if (data.user) {
           // Check role to direct to correct dashboard or chat
+          const isGovEmail = cleanEmail.endsWith('.gov.ph') || cleanEmail.includes('@psa.') || cleanEmail.includes('@dfa.') || cleanEmail.includes('@dpwh.');
           const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
             .maybeSingle();
 
-          const targetRole = profile?.role || 'citizen';
+          const targetRole = profile?.role === 'agency_admin' || isGovEmail ? 'agency_admin' : (profile?.role || 'citizen');
           const redirectPath = getRoleRedirectPath(targetRole);
           router.push(redirectPath === '/citizen/chat' ? '/chat' : redirectPath);
           router.refresh();
         }
       } else {
-        // Register mode
+        // Register mode: auto-detect agency role if signing up with official government domain
+        const isGovEmail = cleanEmail.endsWith('.gov.ph') || cleanEmail.includes('psa') || cleanEmail.includes('dfa') || cleanEmail.includes('dpwh');
+        const agencyCode = cleanEmail.includes('psa') ? 'PSA' : cleanEmail.includes('dfa') ? 'DFA' : cleanEmail.includes('dpwh') ? 'DPWH' : 'PSA';
+        const detectedRole = isGovEmail ? 'agency_admin' : 'citizen';
+
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
           options: {
             data: {
               full_name: fullName.trim(),
+              role: detectedRole,
+              agency_code: isGovEmail ? agencyCode : undefined,
             },
           },
         });
@@ -96,7 +103,8 @@ export function AuthCard({ initialMode = 'login' }: AuthCardProps) {
 
         if (data.session) {
           // Instant sign-in (email confirmation off in Supabase)
-          router.push('/chat');
+          const redirectPath = detectedRole === 'agency_admin' ? '/agency/dashboard' : '/chat';
+          router.push(redirectPath);
           router.refresh();
         } else {
           // Confirmation email sent

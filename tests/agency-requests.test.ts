@@ -5,6 +5,8 @@ import {
   findRequestById,
   updateRequestStatusBar,
   resetRequestsToDemo,
+  clearAllRequests,
+  createOrGetRequestForInquiry,
 } from '@/lib/citizen/requests';
 
 describe('Citizen Service Requests & Agency Chrome Extension Store', () => {
@@ -12,7 +14,7 @@ describe('Citizen Service Requests & Agency Chrome Extension Store', () => {
     resetRequestsToDemo();
   });
 
-  it('loads seeded requests for DFA, DPWH, and PSA', () => {
+  it('loads seeded requests for DFA, DPWH, and PSA when demo is explicitly reset', () => {
     const list = getCitizenRequests();
     expect(list.length).toBeGreaterThanOrEqual(3);
 
@@ -25,6 +27,62 @@ describe('Citizen Service Requests & Agency Chrome Extension Store', () => {
     const dpwh = list.find((r) => r.agencyCode === 'DPWH');
     expect(dpwh).toBeDefined();
     expect(dpwh?.serviceCode).toBe('DPWH_PROJECTS');
+  });
+
+  it('starts with zero predefined processes for a new citizen account', () => {
+    clearAllRequests();
+    const newCitizenRequests = getCitizenRequests('new-citizen-123');
+    expect(newCitizenRequests).toHaveLength(0);
+  });
+
+  it('dynamically creates a PSA process when citizen asks in chat about getting a PSA', () => {
+    clearAllRequests();
+    const citizenId = 'citizen-ana-001';
+
+    // Verify empty before asking
+    expect(getCitizenRequests(citizenId)).toHaveLength(0);
+
+    // Citizen asks in chat
+    const created = createOrGetRequestForInquiry({
+      citizenId,
+      citizenName: 'Ana Dela Cruz',
+      queryText: 'Paano mag-request ng PSA Birth Certificate online sa PSA Serbilis?',
+      serviceCode: 'PSA_BIRTH_CERT',
+    });
+
+    expect(created).not.toBeNull();
+    expect(created?.agencyCode).toBe('PSA');
+    expect(created?.serviceCode).toBe('PSA_BIRTH_CERT');
+    expect(created?.status).toBe('under_review');
+    expect(created?.currentStep).toBe(2);
+    expect(created?.steps).toHaveLength(5);
+
+    // Verify now shows in citizen's account
+    const citizenList = getCitizenRequests(citizenId);
+    expect(citizenList).toHaveLength(1);
+    expect(citizenList[0].serviceTitle).toContain('PSA Birth Certificate');
+  });
+
+  it('deduplicates processes so repeated PSA inquiries reuse the active process', () => {
+    clearAllRequests();
+    const citizenId = 'citizen-ana-001';
+
+    const first = createOrGetRequestForInquiry({
+      citizenId,
+      citizenName: 'Ana Dela Cruz',
+      queryText: 'How to get PSA birth certificate?',
+      serviceCode: 'PSA_BIRTH_CERT',
+    });
+
+    const second = createOrGetRequestForInquiry({
+      citizenId,
+      citizenName: 'Ana Dela Cruz',
+      queryText: 'Magkano bayarin sa PSA birth cert delivery?',
+      serviceCode: 'PSA_BIRTH_CERT',
+    });
+
+    expect(second?.id).toBe(first?.id);
+    expect(getCitizenRequests(citizenId)).toHaveLength(1);
   });
 
   it('filters requests by agency for the Chrome Extension', () => {

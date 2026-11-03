@@ -363,39 +363,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      audit_logs: {
-        Row: {
-          id: string;
-          actor_id: string | null;
-          actor_role: string;
-          action: string;
-          target_type: string;
-          target_id: string;
-          details: Json;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          actor_id?: string | null;
-          actor_role: string;
-          action: string;
-          target_type: string;
-          target_id: string;
-          details?: Json;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          actor_id?: string | null;
-          actor_role?: string;
-          action?: string;
-          target_type?: string;
-          target_id?: string;
-          details?: Json;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       chat_unanswered: {
         Row: {
           id: string;

@@ -31,7 +31,7 @@ interface ExpenseReceiptCardProps {
 
 export function ExpenseReceiptCard({
   initialService = 'NBI',
-  isFirstTimeJobseeker = true,
+  isFirstTimeJobseeker = false,
   applicantName = 'Citizen Applicant',
   onAskInChat,
   className = '',
@@ -357,7 +357,7 @@ export function ExpenseReceiptCard({
             onClick={() => {
               if (isNbi) {
                 onAskInChat(
-                  'Magkano ang kabuuang babayaran ko sa NBI Clearance bilang First-Time Jobseeker at paano ma-avail ang libreng bayad?'
+                  'Magkano ang kabuuang babayaran ko sa NBI Clearance at ano-ano ang mga kasamang bayarin?'
                 );
               } else if (isPsa) {
                 onAskInChat(

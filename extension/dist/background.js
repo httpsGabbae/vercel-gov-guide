@@ -49,44 +49,43 @@ async function i(e, r) {
 }
 // extension/src/lib/vault.ts
 var a = "govguide_citizen_vault_encrypted", o = "govguide_extension_session", s = {
-	firstName: "Juan",
-	middleName: "Santos",
-	lastName: "Dela Cruz",
+	firstName: "",
+	middleName: "",
+	lastName: "",
 	suffix: "",
 	gender: "MALE",
-	dateOfBirth: "1994-06-12",
-	placeOfBirth: "Manila, Philippines",
+	dateOfBirth: "",
+	placeOfBirth: "",
 	civilStatus: "SINGLE",
 	nationality: "FILIPINO",
-	fatherFullName: "Roberto Mendoza Dela Cruz",
-	fatherFirstName: "Roberto",
-	fatherMiddleName: "Mendoza",
-	fatherLastName: "Dela Cruz",
+	fatherFullName: "",
+	fatherFirstName: "",
+	fatherMiddleName: "",
+	fatherLastName: "",
 	fatherSuffix: "",
-	motherMaidenFirstName: "Maria",
-	motherMaidenMiddleName: "Gomez",
-	motherMaidenLastName: "Santos",
+	motherMaidenFirstName: "",
+	motherMaidenMiddleName: "",
+	motherMaidenLastName: "",
 	motherMaidenSuffix: "",
-	mobileNumber: "09175550192",
-	emailAddress: "juan.delacruz@govguide.ph",
-	landline: "(02) 8527-1111",
-	region: "National Capital Region (NCR)",
-	province: "Metro Manila",
-	cityMunicipality: "City of Manila",
-	barangay: "Barangay 659-A, Ermita",
-	streetHouseNumber: "1024 General Luna Street",
-	zipCode: "1000",
-	philsysId: "1234-5678-9012-3456",
-	tin: "123-456-789-000",
-	sssNumber: "03-9876543-2",
-	philhealthNumber: "12-345678901-2",
-	pagibigMid: "1210-9876-5432",
-	passportNumber: "P8921824B"
+	mobileNumber: "",
+	emailAddress: "",
+	landline: "",
+	region: "",
+	province: "",
+	cityMunicipality: "",
+	barangay: "",
+	streetHouseNumber: "",
+	zipCode: "",
+	philsysId: "",
+	tin: "",
+	sssNumber: "",
+	philhealthNumber: "",
+	pagibigMid: "",
+	passportNumber: ""
 }, c = {
-	userRole: "citizen",
+	userRole: "guest",
+	isAuthenticated: !1,
 	citizenId: "active",
-	officerName: "Consular Officer Maria Teresa Gomez",
-	agencyCode: "DFA",
 	apiBaseUrl: "http://localhost:3000",
 	isOnlineSyncEnabled: !0
 };
@@ -132,62 +131,63 @@ async function f(e, t) {
 	});
 }
 function p(e, t) {
-	let n = t || s;
-	if (!e || typeof e != "object") return n;
-	let r = e.first_name || "", i = e.middle_name || "", a = e.last_name || "", o = e.suffix || "";
-	if (!r && e.display_name && e.display_name.trim()) {
+	if (!e || typeof e != "object") return t || s;
+	let n = (e.first_name || "").trim(), r = (e.middle_name || "").trim(), i = (e.last_name || "").trim(), a = (e.suffix || "").trim();
+	if (!n && !i && e.display_name && e.display_name.trim()) {
 		let t = e.display_name.trim().split(/\s+/);
-		t.length === 1 ? r = t[0] : t.length === 2 ? (r = t[0], a = t[1]) : t.length >= 3 && (r = t[0], i = t.slice(1, -1).join(" "), a = t[t.length - 1]);
+		t.length === 1 ? n = t[0] : t.length === 2 ? (n = t[0], i = t[1]) : t.length >= 3 && (n = t[0], r = t.slice(1, -1).join(" "), i = t[t.length - 1]);
 	}
-	let c = e.father_first_name || "", l = e.father_middle_name || "", u = e.father_last_name || "", d = e.father_suffix || "", f = e.father_name || "";
-	if (!c && f && f.trim()) {
-		let e = f.trim().split(/\s+/);
-		e.length === 1 ? c = e[0] : e.length === 2 ? (c = e[0], u = e[1]) : e.length >= 3 && (c = e[0], l = e.slice(1, -1).join(" "), u = e[e.length - 1]);
+	let o = (e.father_first_name || "").trim(), c = (e.father_middle_name || "").trim(), l = (e.father_last_name || "").trim(), u = (e.father_suffix || "").trim(), d = (e.father_name || "").trim();
+	if (!o && !l && d) {
+		let e = d.split(/\s+/);
+		e.length === 1 ? o = e[0] : e.length === 2 ? (o = e[0], l = e[1]) : e.length >= 3 && (o = e[0], c = e.slice(1, -1).join(" "), l = e[e.length - 1]);
 	}
-	let p = e.mother_first_name || "", m = e.mother_middle_name || "", h = e.mother_last_name || e.maiden_name || "", g = e.mother_suffix || "", _ = e.mother_maiden_name || "";
-	if (!p && _ && _.trim()) {
-		let e = _.trim().split(/\s+/);
-		e.length === 1 ? p = e[0] : e.length === 2 ? (p = e[0], h = e[1]) : e.length >= 3 && (p = e[0], m = e.slice(1, -1).join(" "), h = e[e.length - 1]);
+	let f = (e.mother_first_name || "").trim(), p = (e.mother_middle_name || "").trim(), m = (e.mother_last_name || e.maiden_name || "").trim(), h = (e.mother_suffix || "").trim(), g = (e.mother_maiden_name || "").trim();
+	if (!f && !m && g) {
+		let e = g.split(/\s+/);
+		e.length === 1 ? f = e[0] : e.length === 2 ? (f = e[0], m = e[1]) : e.length >= 3 && (f = e[0], p = e.slice(1, -1).join(" "), m = e[e.length - 1]);
 	}
+	let _ = t || s;
 	return {
-		firstName: r || n.firstName,
-		middleName: i || n.middleName,
-		lastName: a || n.lastName,
-		suffix: o || n.suffix,
-		gender: e.gender?.toUpperCase() === "FEMALE" ? "FEMALE" : "MALE",
-		dateOfBirth: e.birth_date || e.date_of_birth || n.dateOfBirth,
-		placeOfBirth: e.place_of_birth || (e.city ? `${e.city}, Philippines` : n.placeOfBirth),
-		civilStatus: e.civil_status?.toUpperCase() || n.civilStatus,
-		nationality: e.nationality || "FILIPINO",
-		fatherFullName: f || [
+		firstName: n || _.firstName || "",
+		middleName: r || _.middleName || "",
+		lastName: i || _.lastName || "",
+		suffix: a || _.suffix || "",
+		gender: e.gender?.toUpperCase() === "FEMALE" ? "FEMALE" : e.gender?.toUpperCase() === "OTHER" ? "OTHER" : "MALE",
+		dateOfBirth: e.birth_date || e.date_of_birth || _.dateOfBirth || "",
+		placeOfBirth: e.place_of_birth || (e.city ? `${e.city}, Philippines` : _.placeOfBirth || ""),
+		civilStatus: e.civil_status?.toUpperCase() || _.civilStatus || "SINGLE",
+		nationality: e.nationality || _.nationality || "FILIPINO",
+		fatherFullName: d || [
+			o,
 			c,
 			l,
-			u,
-			d
-		].filter(Boolean).join(" ") || n.fatherFullName,
-		fatherFirstName: c || n.fatherFirstName,
-		fatherMiddleName: l || n.fatherMiddleName,
-		fatherLastName: u || n.fatherLastName,
-		fatherSuffix: d || n.fatherSuffix,
-		motherMaidenFirstName: p || n.motherMaidenFirstName,
-		motherMaidenMiddleName: m || n.motherMaidenMiddleName,
-		motherMaidenLastName: h || n.motherMaidenLastName,
-		motherMaidenSuffix: g || n.motherMaidenSuffix,
-		mobileNumber: e.contact_number || e.phone || n.mobileNumber,
-		emailAddress: e.email || n.emailAddress,
-		landline: e.landline || n.landline,
-		region: e.region || n.region,
-		province: e.province || n.province,
-		cityMunicipality: e.city || n.cityMunicipality,
-		barangay: e.barangay || n.barangay,
-		streetHouseNumber: e.street_address || e.residential_address || n.streetHouseNumber,
-		zipCode: e.zip_code || n.zipCode,
-		philsysId: e.philsys_id || e.philsys_card_number || n.philsysId,
-		tin: e.tin || e.tin_number || n.tin,
-		sssNumber: e.sss_number || n.sssNumber,
-		philhealthNumber: e.philhealth_number || n.philhealthNumber,
-		pagibigMid: e.pagibig_number || n.pagibigMid,
-		passportNumber: e.passport_number || n.passportNumber
+			u
+		].filter(Boolean).join(" ") || _.fatherFullName || "",
+		fatherFirstName: o || _.fatherFirstName || "",
+		fatherMiddleName: c || _.fatherMiddleName || "",
+		fatherLastName: l || _.fatherLastName || "",
+		fatherSuffix: u || _.fatherSuffix || "",
+		motherMaidenFirstName: f || _.motherMaidenFirstName || "",
+		motherMaidenMiddleName: p || _.motherMaidenMiddleName || "",
+		motherMaidenLastName: m || _.motherMaidenLastName || "",
+		motherMaidenSuffix: h || _.motherMaidenSuffix || "",
+		mobileNumber: e.phone || e.mobile || e.mobile_number || e.contact_number || _.mobileNumber || "",
+		emailAddress: e.email || _.emailAddress || "",
+		landline: e.landline || _.landline || "",
+		region: e.region || _.region || "",
+		province: e.province || _.province || "",
+		cityMunicipality: e.city || _.cityMunicipality || "",
+		barangay: e.barangay || _.barangay || "",
+		streetHouseNumber: e.street_address || e.residential_address || _.streetHouseNumber || "",
+		zipCode: e.zip_code || _.zipCode || "",
+		philsysId: e.philsys_id || e.philsys_card_number || _.philsysId || "",
+		tin: e.tin || e.tin_number || _.tin || "",
+		sssNumber: e.sss_number || _.sssNumber || "",
+		philhealthNumber: e.philhealth_number || _.philhealthNumber || "",
+		pagibigMid: e.pagibig_number || e.pagibigMid || _.pagibigMid || "",
+		passportNumber: e.passport_number || e.passportNumber || _.passportNumber || "",
+		relationshipToOwner: e.relationship || _.relationshipToOwner || "Self"
 	};
 }
 async function m(e, t) {
@@ -211,7 +211,7 @@ function h() {
 	chrome.contextMenus.removeAll(() => {
 		chrome.contextMenus.create({
 			id: "govguide_root",
-			title: "🇵🇭 GovGuide PH Copilot",
+			title: "GovGuide PH",
 			contexts: ["editable"]
 		}), chrome.contextMenus.create({
 			id: "govguide_paste_mmn",
@@ -267,10 +267,108 @@ chrome.contextMenus.onClicked.addListener(async (e, t) => {
 		},
 		args: [r]
 	});
-}), chrome.runtime.onMessage.addListener((e, t, n) => (g(e).then(n).catch((e) => {
+});
+function g(e) {
+	try {
+		chrome.runtime.sendMessage({
+			type: "SESSION_UPDATED",
+			session: _(e)
+		}, () => {
+			chrome.runtime.lastError;
+		});
+	} catch {}
+}
+function _(e) {
+	let { accessToken: t, refreshToken: n, ...r } = e;
+	return r;
+}
+async function v(e, t, n) {
+	let r = await u({
+		isAuthenticated: !0,
+		authSource: n,
+		userRole: e.role,
+		userId: e.userId,
+		email: e.email,
+		fullName: e.fullName,
+		officerName: e.fullName,
+		agencyCode: e.agencyCode,
+		agencyName: e.agencyName,
+		accessToken: t.accessToken,
+		refreshToken: t.refreshToken,
+		expiresAt: t.expiresAt
+	});
+	return g(r), r;
+}
+async function y() {
+	let e = await u({
+		isAuthenticated: !1,
+		authSource: void 0,
+		userRole: "guest",
+		userId: void 0,
+		email: void 0,
+		fullName: void 0,
+		officerName: void 0,
+		agencyCode: void 0,
+		agencyName: void 0,
+		accessToken: void 0,
+		refreshToken: void 0,
+		expiresAt: void 0
+	});
+	return g(e), e;
+}
+async function b(e) {
+	if (!e.refreshToken) return null;
+	try {
+		let t = await fetch(`${e.apiBaseUrl}/api/extension/auth`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ refreshToken: e.refreshToken })
+		}), n = await t.json();
+		return !t.ok || !n.success ? null : await v(n.user, n.tokens, e.authSource || "extension");
+	} catch {
+		return null;
+	}
+}
+async function x(e, t = {}) {
+	let n = await l();
+	if (!n.isAuthenticated || !n.accessToken) throw Error("Not signed in.");
+	let r = (r) => fetch(`${n.apiBaseUrl}${e}`, {
+		...t,
+		headers: {
+			...t.headers || {},
+			Authorization: `Bearer ${r}`
+		}
+	}), i = await r(n.accessToken);
+	if (i.status === 401) {
+		let e = await b(n);
+		if (!e || !e.accessToken) throw await y(), Error("Session expired. Please sign in again.");
+		n = e, i = await r(e.accessToken);
+	}
+	return i;
+}
+var S = null;
+async function C(e) {
+	let t = await l();
+	if (e.signedOut || !e.accessToken) return t.isAuthenticated && t.authSource === "web" && t.accessToken ? { session: _(await y()) } : { session: _(t) };
+	if (t.isAuthenticated && t.accessToken === e.accessToken || S === e.accessToken) return { session: _(t) };
+	S = e.accessToken;
+	try {
+		let n = await fetch(`${t.apiBaseUrl}/api/extension/auth`, { headers: { Authorization: `Bearer ${e.accessToken}` } }), r = await n.json();
+		return !n.ok || !r.success ? {
+			session: _(t),
+			error: r.error || "Web session could not be verified"
+		} : { session: _(await v(r.user, {
+			accessToken: e.accessToken,
+			refreshToken: e.refreshToken || ""
+		}, "web")) };
+	} finally {
+		S = null;
+	}
+}
+chrome.runtime.onMessage.addListener((e, t, n) => (w(e).then(n).catch((e) => {
 	n({ error: e.message || "Unknown background error" });
 }), !0));
-async function g(e) {
+async function w(e) {
 	switch (e.type) {
 		case "GET_VAULT":
 			try {
@@ -291,24 +389,72 @@ async function g(e) {
 			} catch {}
 			return { success: !0 };
 		case "PUSH_VAULT_FROM_WEB": {
-			let { applicant: t, citizenId: n } = e.payload, r = p(t, await d());
-			await f(r), await u({
-				citizenId: n || t?.id || "active",
+			let { applicant: t, citizenId: n, apiBaseUrl: r } = e.payload, i = p(t, await d());
+			await f(i);
+			let a = n || t?.id || "active", o = await l(), s = !!t?.display_name?.trim() || !!t?.first_name?.trim() || !!t?.email?.trim() || a !== "active" && a !== "e1000000-0000-4000-8000-000000000003", c = {
+				citizenId: a,
 				lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
-			});
+			};
+			r && (c.apiBaseUrl = r), !o.isAuthenticated && s && (c.isAuthenticated = !0, c.authSource = "web", c.userRole = "citizen", c.userId = a, c.email = t?.email || "citizen@govguide.ph", c.fullName = t?.display_name || [t?.first_name, t?.last_name].filter(Boolean).join(" ") || "Citizen Session");
+			let m = await u(c);
+			!o.isAuthenticated && m.isAuthenticated && g(m);
 			try {
 				chrome.runtime.sendMessage({
 					type: "VAULT_UPDATED",
-					vault: r
+					vault: i
 				});
 			} catch {}
 			return {
 				success: !0,
-				vault: r
+				vault: i
 			};
 		}
-		case "GET_SESSION": return { session: await l() };
-		case "SET_SESSION": return { session: await u(e.payload) };
+		case "GET_SESSION": {
+			let e = await l();
+			if (!e.isAuthenticated && e.isOnlineSyncEnabled) try {
+				let t = e.citizenId && e.citizenId !== "967760de-3912-5aaf-8ce9-48b2a8dd55f0" ? e.citizenId : "active", n = await fetch(`${e.apiBaseUrl}/api/citizen/details?citizenId=${encodeURIComponent(t)}`);
+				if (n.ok) {
+					let r = await n.json(), i = r?.applicant;
+					r?.ok && i && (r.source === "active_session_cache" || r.source === "supabase_profile" || i.display_name?.trim() || i.first_name?.trim() || i.email?.trim()) && (await f(p(i, await d())), e = await u({
+						isAuthenticated: !0,
+						authSource: "web",
+						userRole: "citizen",
+						userId: i.id || t,
+						citizenId: i.id || t,
+						email: i.email || "citizen@govguide.ph",
+						fullName: i.display_name || [i.first_name, i.last_name].filter(Boolean).join(" ") || "Citizen Session",
+						lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
+					}));
+				}
+			} catch {}
+			return { session: _(e) };
+		}
+		case "SET_SESSION": {
+			let { isAuthenticated: t, userRole: n, accessToken: r, refreshToken: i, authSource: a, ...o } = e.payload;
+			return { session: _(await u(o)) };
+		}
+		case "LOGIN": {
+			let t = await l(), n = await fetch(`${t.apiBaseUrl}/api/extension/auth`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: e.payload.email,
+					password: e.payload.password
+				})
+			}), r = await n.json().catch(() => ({}));
+			return !n.ok || !r.success ? {
+				success: !1,
+				error: r.error || "Invalid email or password."
+			} : {
+				success: !0,
+				session: _(await v(r.user, r.tokens, "extension"))
+			};
+		}
+		case "LOGOUT": return {
+			success: !0,
+			session: _(await y())
+		};
+		case "SYNC_WEB_AUTH": return await C(e.payload);
 		case "SYNC_FROM_GOVGUIDE": {
 			let t = await l(), n = e.payload?.citizenId || (t.citizenId && t.citizenId !== "967760de-3912-5aaf-8ce9-48b2a8dd55f0" ? t.citizenId : "active"), r = await m(t.apiBaseUrl, n);
 			try {
@@ -322,24 +468,29 @@ async function g(e) {
 				vault: r
 			};
 		}
+		case "FETCH_AGENCY_REQUESTS": {
+			let t = e.payload?.q?.trim() || "", n = await x(`/api/agency/requests${t ? `?q=${encodeURIComponent(t)}` : ""}`), r = await n.json();
+			if (!n.ok || !r.success) throw Error(r.error || "Failed to load agency requests");
+			return {
+				success: !0,
+				data: r.data
+			};
+		}
 		case "UPDATE_REQUEST_STATUS": {
-			let t = await l(), n = await fetch(`${t.apiBaseUrl}/api/agency/requests`, {
+			let t = await x("/api/agency/requests", {
 				method: "PATCH",
-				headers: {
-					"Content-Type": "application/json",
-					"x-agency-role": "counter_officer"
-				},
+				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(e.payload)
-			}), r = await n.json();
-			if (!n.ok) throw Error(r.error || "Failed to update agency request status");
+			}), n = await t.json();
+			if (!t.ok || !n.success) throw Error(n.error || "Failed to update agency request status");
 			return chrome.notifications.create({
 				type: "basic",
 				iconUrl: "icons/icon-128.png",
 				title: "GovGuide Agency Bridge",
-				message: `Status updated to '${e.payload.statusLabel}' for ${e.payload.requestId}`
+				message: `${e.payload.requestId} updated: ${n.data?.statusLabel || "Saved"}`
 			}), {
 				success: !0,
-				data: r.data
+				data: n.data
 			};
 		}
 		case "SHOW_NOTIFICATION": return chrome.notifications.create({

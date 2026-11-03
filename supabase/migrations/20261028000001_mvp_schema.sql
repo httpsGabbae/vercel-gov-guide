@@ -125,18 +125,6 @@ create table if not exists public.notifications (
   created_at timestamptz default now() not null
 );
 
--- 11. Audit Logs Table (Immutable Civic Activity Log)
-create table if not exists public.audit_logs (
-  id uuid primary key default gen_random_uuid(),
-  actor_id uuid references auth.users(id) on delete set null,
-  actor_role text not null,
-  action text not null,
-  target_type text not null,
-  target_id text not null,
-  details jsonb default '{}'::jsonb not null,
-  created_at timestamptz default now() not null
-);
-
 -- 12. Chat Unanswered Log Table
 create table if not exists public.chat_unanswered (
   id uuid primary key default gen_random_uuid(),
@@ -224,7 +212,6 @@ alter table public.pending_actions enable row level security;
 alter table public.appointment_slots enable row level security;
 alter table public.appointments enable row level security;
 alter table public.notifications enable row level security;
-alter table public.audit_logs enable row level security;
 alter table public.chat_unanswered enable row level security;
 
 -- Policies: Agencies
@@ -325,17 +312,6 @@ create policy "Citizens read own notifications"
 drop policy if exists "Citizens update own notifications (mark as read)" on public.notifications;
 create policy "Citizens update own notifications (mark as read)"
   on public.notifications for update using (citizen_id = auth.uid());
-
--- Policies: Audit Logs
-drop policy if exists "System and users can insert audit logs" on public.audit_logs;
-create policy "System and users can insert audit logs"
-  on public.audit_logs for insert with check (true);
-
-drop policy if exists "Audit logs viewable by agency and platform admins" on public.audit_logs;
-create policy "Audit logs viewable by agency and platform admins"
-  on public.audit_logs for select using (
-    public.current_user_role() in ('agency_admin', 'platform_admin')
-  );
 
 -- Policies: Chat Unanswered
 drop policy if exists "Everyone can record unanswered chat" on public.chat_unanswered;

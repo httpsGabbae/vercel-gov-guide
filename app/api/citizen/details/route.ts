@@ -75,21 +75,32 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (profile) {
+      const isAgency = profile.role === 'agency_admin' || !!profile.agency_id;
+      let agencyData: { id: string; code: string; name: string } | null = null;
+      if (profile.agency_id) {
+        const { data: ag } = await supabase.from('agencies').select('id, code, name').eq('id', profile.agency_id).maybeSingle();
+        if (ag) agencyData = ag;
+      }
+      if (!agencyData && profile.email?.includes('psa')) {
+        agencyData = { id: 'psa', code: 'PSA', name: 'Philippine Statistics Authority' };
+      }
       const consent = (profile.consent_settings as CitizenDetailsPayload) || {};
       const savedApplicant = consent.applicant;
 
       if (savedApplicant) {
         const isDemoPersona = profile.id === PROFILES.jobseeker.id || profile.id === PROFILES.married_applicant.id;
-        const cleanDisplayName = (!isDemoPersona && savedApplicant.display_name === 'Juan Santos Dela Cruz')
+        const cleanDisplayName = isAgency && agencyData
+          ? `${agencyData.name} (${agencyData.code})`
+          : (!isDemoPersona && savedApplicant.display_name === 'Juan Santos Dela Cruz')
           ? (profile.full_name || '')
           : (savedApplicant.display_name || profile.full_name || '');
         const cleanApplicant: ApplicantProfile = (!isDemoPersona && savedApplicant.display_name === 'Juan Santos Dela Cruz')
           ? {
               ...savedApplicant,
               display_name: cleanDisplayName,
-              first_name: profile.first_name || '',
+              first_name: isAgency && agencyData ? agencyData.name : (profile.first_name || ''),
               middle_name: profile.middle_name || '',
-              last_name: profile.last_name || '',
+              last_name: isAgency && agencyData ? `(${agencyData.code})` : (profile.last_name || ''),
               birth_date: profile.birth_date || '',
               civil_status: profile.civil_status || '',
               barangay: profile.barangay || '',
@@ -99,6 +110,15 @@ export async function GET(req: NextRequest) {
               ...savedApplicant,
               display_name: cleanDisplayName,
             };
+
+        if (isAgency && agencyData) {
+          cleanApplicant.display_name = `${agencyData.name} (${agencyData.code})`;
+          cleanApplicant.first_name = agencyData.name;
+          cleanApplicant.last_name = `(${agencyData.code})`;
+          cleanApplicant.initials = agencyData.code;
+          cleanApplicant.title = `${agencyData.code} · Official Agency Account`;
+          cleanApplicant.role = 'agency_admin';
+        }
 
         if (!isDemoPersona) {
           const hasPhilsysDoc = Array.isArray(consent.saved_files) && consent.saved_files.some((f: any) =>
@@ -153,14 +173,16 @@ export async function GET(req: NextRequest) {
           source: 'supabase_profile_fresh',
           applicant: {
             id: profile.id,
-            role: 'citizen',
-            display_name: profile.full_name || '',
-            first_name: profile.first_name || '',
+            role: isAgency ? 'agency_admin' : 'citizen',
+            display_name: isAgency && agencyData
+              ? `${agencyData.name} (${agencyData.code})`
+              : (profile.full_name || ''),
+            first_name: isAgency && agencyData ? agencyData.name : (profile.first_name || ''),
             middle_name: profile.middle_name || '',
-            last_name: profile.last_name || '',
+            last_name: isAgency && agencyData ? `(${agencyData.code})` : (profile.last_name || ''),
             suffix: profile.suffix || '',
-            initials: (profile.full_name || 'CA').slice(0, 2).toUpperCase(),
-            title: 'Citizen Account',
+            initials: isAgency && agencyData ? agencyData.code : (profile.full_name || 'CA').slice(0, 2).toUpperCase(),
+            title: isAgency && agencyData ? `${agencyData.code} · Official Agency Account` : 'Citizen Account',
             birth_date: profile.birth_date || '',
             civil_status: profile.civil_status || '',
             barangay: profile.barangay || '',
@@ -352,7 +374,12 @@ export async function DELETE(req: NextRequest) {
     const citizenId = searchParams.get('citizenId') || DEFAULT_CITIZEN_ID;
 
     const isMarried = citizenId === PROFILES.married_applicant.id;
-    const initialApplicant = isMarried ? PROFILES.married_applicant : PROFILES.jobseeker;
+    const isJobseeker = citizenId === PROFILES.jobseeker.id;
+    const initialApplicant = isMarried
+      ? PROFILES.married_applicant
+      : isJobseeker
+        ? PROFILES.jobseeker
+        : PROFILES.new_citizen;
     const initialFiles = createInitialSavedFiles();
     const initialChecklists = createInitialChecklists();
     const initialInspections = createInitialInspections();

@@ -11,7 +11,7 @@ export default function NotFound() {
           Hindi Nahanap ang Pahina
         </h1>
         <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-          Ang hinahanap mong serbisyo o pahina ay wala o nailipat na. Mangyaring bumalik sa KaagapAI Chat o Services Directory.
+          Ang hinahanap mong serbisyo o pahina ay wala o nailipat na. Mangyaring bumalik sa GovGuide PH Chat o Services Directory.
         </p>
         <div className="mt-6 flex flex-col gap-2">
           <Link

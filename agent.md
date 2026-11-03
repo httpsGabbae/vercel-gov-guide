@@ -8,7 +8,7 @@
 
 | Principle | What it means in practice |
 |---|---|
-| **Calm, ChatGPT/KaagapAI-style shell** | White canvas, hairline borders, generous whitespace, one primary action per surface. No heavy gradients on chrome. |
+| **Calm, ChatGPT/GovGuide PH-style shell** | White canvas, hairline borders, generous whitespace, one primary action per surface. No heavy gradients on chrome. |
 | **Civic trust** | Every AI answer looks *grounded*: citations become clickable chips, sources appear in a footer, legal badges (RA 10173, RA 11032) are visible. |
 | **Anti "balik-pila"** | UI always pushes the citizen toward being **Counter-Ready**: checklists, issue counts (expired / mismatch / missing), next actions. |
 | **Labor illusion** | The AI **always** shows a deliberate loading sequence (min. 2.2 s) even if the backend is instant. Never remove this (see §7). |
@@ -32,7 +32,7 @@
 | `components/chat/ChatLoadingAnimation.tsx` | Deliberate AI "thinking" card. |
 | `components/chat/AgentResponseView.tsx` | Styled bot answer card (header, copy, cards, next actions, sources footer). |
 | `components/chat/CivicMarkdown.tsx` | Lightweight markdown → civic-styled React renderer. |
-| `components/chat/ChecklistCard.tsx`, `SourceChips.tsx`, `FallbackContactCard.tsx`, `LanguageToggle.tsx` | Legacy/standalone chat widgets. |
+| `components/chat/ChecklistCard.tsx`, `SourceChips.tsx`, `FallbackContactCard.tsx`, `LanguageToggle.tsx`, `OnlineApplicationCard.tsx` | Chat widgets & simplified online application guidance. |
 | `components/ui/*` | shadcn-style primitives (button, card, dialog, badge). |
 | `components/shared/*` | header, navigation, language toggle, status badge. |
 

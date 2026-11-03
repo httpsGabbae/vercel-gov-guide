@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getVaultValue } from '../extension/src/content/detector';
-import { DEFAULT_VAULT_DATA } from '../extension/src/lib/vault';
+import { getVaultValue, matchesRadioValue } from '../extension/src/content/detector';
+import { DEFAULT_VAULT_DATA, applicantToVault } from '../extension/src/lib/vault';
 
 describe('GovGuide PH Chrome Extension — Heuristics & Vault Engine', () => {
   it('correctly formats composite full name for Philippine forms', () => {
@@ -43,11 +43,36 @@ describe('GovGuide PH Chrome Extension — Heuristics & Vault Engine', () => {
     expect(fatherLast).toBe('Dela Cruz');
   });
 
+  it('correctly resolves relationshipToOwner default and custom values', () => {
+    expect(getVaultValue(DEFAULT_VAULT_DATA, 'relationshipToOwner')).toBe('Self');
+
+    const customVault = { ...DEFAULT_VAULT_DATA, relationshipToOwner: 'Parent' };
+    expect(getVaultValue(customVault, 'relationshipToOwner')).toBe('Parent');
+  });
+
+  it('accurately matches radio buttons without substring collisions (e.g. m vs female)', () => {
+    // Gender radio matching
+    expect(matchesRadioValue('gender', 'Female', 'FEMALE')).toBe(true);
+    expect(matchesRadioValue('gender', 'Male', 'FEMALE')).toBe(false);
+    expect(matchesRadioValue('gender', 'f', 'FEMALE')).toBe(true);
+    expect(matchesRadioValue('gender', 'm', 'FEMALE')).toBe(false);
+    expect(matchesRadioValue('gender', 'Male', 'MALE')).toBe(true);
+    expect(matchesRadioValue('gender', 'Female', 'MALE')).toBe(false);
+
+    // Civil Status radio matching
+    expect(matchesRadioValue('civilStatus', 'Single', 'SINGLE')).toBe(true);
+    expect(matchesRadioValue('civilStatus', 'Married', 'SINGLE')).toBe(false);
+    expect(matchesRadioValue('civilStatus', 'Separated', 'SINGLE')).toBe(false);
+    expect(matchesRadioValue('civilStatus', 'Married', 'MARRIED')).toBe(true);
+    expect(matchesRadioValue('civilStatus', 'Single', 'MARRIED')).toBe(false);
+  });
+
   it('correctly maps live My Details profile to extension autofill vault', () => {
     const liveProfile = {
       first_name: 'Juan',
       middle_name: 'Santos',
       last_name: 'Dela Cruz',
+      phone: '0917-555-0192',
       father_first_name: 'Roberto',
       mother_maiden_name: 'Maria Gomez Santos',
       philsys_id: '1234-5678-9012-3456',
@@ -55,8 +80,11 @@ describe('GovGuide PH Chrome Extension — Heuristics & Vault Engine', () => {
       barangay: 'Brgy. San Isidro',
     };
 
-    expect(liveProfile.first_name).toBe('Juan');
-    expect(liveProfile.father_first_name).toBe('Roberto');
-    expect(liveProfile.philsys_id).toBe('1234-5678-9012-3456');
+    const vault = applicantToVault(liveProfile);
+    expect(vault.firstName).toBe('Juan');
+    expect(vault.fatherFirstName).toBe('Roberto');
+    expect(vault.philsysId).toBe('1234-5678-9012-3456');
+    expect(vault.mobileNumber).toBe('0917-555-0192');
+    expect(vault.relationshipToOwner).toBe('Self');
   });
 });

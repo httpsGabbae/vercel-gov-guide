@@ -31,24 +31,25 @@ export function injectFieldValue(
     }
   }
 
-  // Radio button handling
+  // Radio button handling (Selector already targets exact matching radio)
   if (element instanceof HTMLInputElement && element.type === 'radio') {
-    const elVal = element.value.toLowerCase().trim();
-    const targetVal = value.toLowerCase().trim();
-    if (elVal === targetVal || targetVal.includes(elVal)) {
-      element.checked = true;
-      element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      element.dispatchEvent(new Event('blur', { bubbles: true, composed: true }));
-      flashSuccessHighlight(element);
-      return true;
-    }
-    return false;
+    element.checked = true;
+    try {
+      element.click();
+    } catch {}
+    element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true, composed: true }));
+    flashSuccessHighlight(element);
+    return true;
   }
 
   // Checkbox handling
   if (element instanceof HTMLInputElement && element.type === 'checkbox') {
     element.checked = Boolean(value);
+    try {
+      element.click();
+    } catch {}
     element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     flashSuccessHighlight(element);
     return true;
@@ -56,13 +57,51 @@ export function injectFieldValue(
 
   // Standard Text Inputs & TextAreas
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    let finalValue = value;
+
+    // Date of Birth conversion: Convert YYYY-MM-DD to MM/DD/YYYY if input is not type="date"
+    if (
+      element instanceof HTMLInputElement &&
+      element.type !== 'date' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) {
+      const [y, m, d] = value.split('-');
+      const placeholder = (element.getAttribute('placeholder') || '').toLowerCase();
+      const aria = (element.getAttribute('aria-label') || '').toLowerCase();
+      const idAndName = `${element.id} ${element.name}`.toLowerCase();
+
+      if (placeholder.includes('dd/mm') || aria.includes('dd/mm') || idAndName.includes('ddmmyyyy')) {
+        finalValue = `${d}/${m}/${y}`;
+      } else {
+        // Standard Philippine civil registry format (e.g. PSA Serbilis MM/DD/YYYY)
+        finalValue = `${m}/${d}/${y}`;
+      }
+    }
+
+    // Mobile Number normalization: 11 digits (09XXXXXXXXX) for Philippine numbers
+    if (
+      element instanceof HTMLInputElement &&
+      (element.type === 'tel' || element.type === 'text') &&
+      (element.name?.toLowerCase().includes('mobile') ||
+        element.placeholder?.toLowerCase().includes('mobile') ||
+        element.id?.toLowerCase().includes('mobile') ||
+        element.getAttribute('maxlength') === '11')
+    ) {
+      const digits = value.replace(/\D/g, '');
+      if (digits.length === 11 && digits.startsWith('09')) {
+        finalValue = digits;
+      } else if (digits.length === 12 && digits.startsWith('63')) {
+        finalValue = '0' + digits.slice(2);
+      }
+    }
+
     const proto = Object.getPrototypeOf(element);
     const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
 
     if (nativeSetter) {
-      nativeSetter.call(element, value);
+      nativeSetter.call(element, finalValue);
     } else {
-      element.value = value;
+      element.value = finalValue;
     }
 
     // 1. Dispatch modern InputEvent with insertText (crucial for Livewire / Alpine)
@@ -73,7 +112,7 @@ export function injectFieldValue(
           composed: true,
           cancelable: true,
           inputType: 'insertText',
-          data: value,
+          data: finalValue,
         })
       );
     } catch {
@@ -98,10 +137,31 @@ export function injectFieldValue(
       const optText = opt.text.toLowerCase().trim();
       const optVal = opt.value.toLowerCase().trim();
 
+      // Skip unselected placeholder option (e.g. "Select Document Owner", "Choose...", "-- Select --")
+      if (!optVal && (optText.includes('select') || optText.includes('choose') || optText.includes('--'))) {
+        continue;
+      }
+
       // Exact match
       if (optText === valLower || optVal === valLower) {
         matchedIndex = i;
         break;
+      }
+
+      // "Self" / Document Owner matching (PSA Serbilis / Helpline)
+      if (valLower === 'self' || valLower === 'myself' || valLower === 'owner') {
+        if (
+          optText.includes('self') ||
+          optText.includes('myself') ||
+          optText.includes('owner') ||
+          optText.includes('may-ari') ||
+          optVal === 'self' ||
+          optVal === 'myself' ||
+          optVal === '1'
+        ) {
+          matchedIndex = i;
+          break;
+        }
       }
 
       // Fuzzy match (e.g. 'metro manila' in 'national capital region' or 'philippines' / '608')

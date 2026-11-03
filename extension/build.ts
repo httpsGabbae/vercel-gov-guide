@@ -32,13 +32,13 @@ function safeCleanDir(targetDir: string) {
 }
 
 async function buildAll() {
-  console.log('📦 Starting GovGuide PH Chrome Extension build...');
+  console.log('[build] Starting GovGuide PH Chrome Extension build...');
 
   // Safe clean without deleting the root dist folder (prevents Windows Chrome EPERM lock)
   safeCleanDir(distDir);
 
   // 1. Build Popup (HTML + React)
-  console.log('1️⃣  Building Popup application...');
+  console.log('[1/4] Building Popup application...');
   await build({
     root: extDir,
     plugins: [react()],
@@ -59,9 +59,10 @@ async function buildAll() {
   });
 
   // 2. Build Background Service Worker (ES module)
-  console.log('2️⃣  Building Background Service Worker...');
+  console.log('[2/4] Building Background Service Worker...');
   await build({
     root: extDir,
+    publicDir: false,
     build: {
       outDir: distDir,
       emptyOutDir: false,
@@ -75,9 +76,10 @@ async function buildAll() {
   });
 
   // 3. Build Content Script (IIFE for instant injection)
-  console.log('3️⃣  Building Content Script (IIFE)...');
+  console.log('[3/4] Building Content Script (IIFE)...');
   await build({
     root: extDir,
+    publicDir: false,
     build: {
       outDir: distDir,
       emptyOutDir: false,
@@ -91,7 +93,7 @@ async function buildAll() {
   });
 
   // 4. Copy Manifest and Icons
-  console.log('4️⃣  Copying Manifest V3 and Assets...');
+  console.log('[4/4] Copying Manifest V3 and Assets...');
   fs.copyFileSync(
     resolve(extDir, 'public/manifest.json'),
     resolve(distDir, 'manifest.json')
@@ -106,10 +108,15 @@ async function buildAll() {
     }
   }
 
-  console.log('🎉 GovGuide PH Chrome Extension built successfully in extension/dist/');
+  const logoSrc = resolve(extDir, 'public/logo.png');
+  if (fs.existsSync(logoSrc)) {
+    fs.copyFileSync(logoSrc, resolve(distDir, 'logo.png'));
+  }
+
+  console.log('[success] GovGuide PH Chrome Extension built successfully in extension/dist/');
 }
 
 buildAll().catch((err) => {
-  console.error('❌ Build failed:', err);
+  console.error('[error] Build failed:', err);
   process.exit(1);
 });
