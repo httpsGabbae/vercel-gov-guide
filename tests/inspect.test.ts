@@ -108,9 +108,9 @@ describe('AI Requirement Checklist & Document Inspection API (/api/inspect)', ()
     // Should NOT attach NBI expense receipt
     expect(data.cards.some((c: { kind: string }) => c.kind === 'expense_receipt')).toBe(false);
     // Text should politely explain the scope
-    expect(data.text.toLowerCase()).toContain('scope');
+    expect(data.text).toBe('I do not understand it, please clarify your request/question');
     // What's next should provide agency quick-picks
-    expect(data.next.length).toBeGreaterThanOrEqual(3);
+    expect(data.cards).toEqual([]);
   });
 
   it('does NOT display NBI when typing numbers only (e.g. "123") and returns out of scope', async () => {
@@ -130,7 +130,7 @@ describe('AI Requirement Checklist & Document Inspection API (/api/inspect)', ()
       expect(data.ok).toBe(true);
       expect(data.blocked).toBe(true);
       expect(data.guardrailCategory).toBe('OUT_OF_SCOPE');
-      expect(data.text).toBe('Out of scope.');
+      expect(data.text).toBe('I do not understand it, please clarify your request/question');
       // Must NOT attach NBI checklist card
       expect(data.cards.some((c: { kind: string }) => c.kind === 'checklist_card')).toBe(false);
       // Must NOT mention NBI Clearance

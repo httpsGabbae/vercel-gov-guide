@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
           const sendEvent = (data: Record<string, unknown>) => {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           };
-          sendEvent({ type: 'token', content: 'Out of scope.' });
+          sendEvent({ type: 'token', content: 'I do not understand it, please clarify your request/question' });
           sendEvent({ type: 'done' });
           controller.close();
         },

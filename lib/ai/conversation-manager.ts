@@ -99,7 +99,7 @@ export async function processConversationTurn(
   if (validation.intent === 'OUT_OF_SCOPE') {
     return {
       route: 'OUT_OF_SCOPE',
-      text: 'Out of scope.',
+      text: 'I do not understand it, please clarify your request/question',
       isStreamable: false,
       validation,
       profile,

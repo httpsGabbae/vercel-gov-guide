@@ -4922,13 +4922,24 @@ export default function CitizenChatPage() {
                                 msg.reply && (
                                   <div className="enter-card flex flex-col gap-3">
                                       <AgentResponseView
-                                        text={msg.reply.text}
+                                        text={
+                                          msg.reply.text === 'Out of scope.' ||
+                                          msg.reply.text.startsWith('[Scope Guardrail:')
+                                            ? 'I do not understand it, please clarify your request/question'
+                                            : msg.reply.text
+                                        }
                                         onOpenSource={(id) => setSourceDrawerId(id)}
                                         cards={
                                           msg.reply.cards && msg.reply.cards.length > 0 ? (
                                             <div className="space-y-3">
                                               {msg.reply.cards.map((c, cIdx) => {
                                                 if (c.kind === 'guardrail_notice' && c.guardrail) {
+                                                  if (
+                                                    c.guardrail.category === 'OUT_OF_SCOPE' ||
+                                                    c.guardrail.policy_code === 'GRD-SCP-004'
+                                                  ) {
+                                                    return null;
+                                                  }
                                                   return (
                                                     <GuardrailAlertCard
                                                       key={`grd-${cIdx}`}

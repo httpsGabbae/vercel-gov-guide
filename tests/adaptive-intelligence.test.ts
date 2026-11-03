@@ -59,7 +59,7 @@ describe('GovGuidePH Version 1.0 — Adaptive Government Intelligence Master Tes
         citizenId: 'cit-scope-test-01',
       });
       expect(res.route).toBe('OUT_OF_SCOPE');
-      expect(res.text).toBe('Out of scope.');
+      expect(res.text).toBe('I do not understand it, please clarify your request/question');
     });
 
     it('allows unusual but valid government and civic questions as GOVERNMENT_INFORMATION', () => {
@@ -440,7 +440,7 @@ describe('GovGuidePH Version 1.0 — Adaptive Government Intelligence Master Tes
       const res = await postChatRoute(req);
       expect(res.status).toBe(200);
       const rawText = await res.text();
-      expect(rawText).toContain('Out of scope.');
+      expect(rawText).toContain('I do not understand it, please clarify your request/question');
       expect(rawText).not.toContain('Citizen');
     });
 

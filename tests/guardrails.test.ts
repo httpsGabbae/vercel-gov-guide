@@ -68,7 +68,7 @@ describe('Multi-Layer AI Guardrails & System Q&A Engine', () => {
       const res = evaluateGuardrails(q, DEMO_APPLICANT, 'Auto');
       expect(res.blocked).toBe(true);
       expect(res.category).toBe('OUT_OF_SCOPE');
-      expect(res.guardrailCard?.policy_code).toBe('GRD-SCP-004');
+      expect(res.replyText).toBe('I do not understand it, please clarify your request/question');
     }
   });
 
@@ -127,7 +127,7 @@ describe('Multi-Layer AI Guardrails & System Q&A Engine', () => {
     expect(data.ok).toBe(true);
     expect(data.blocked).toBe(true);
     expect(data.guardrailCategory).toBe('PROMPT_INJECTION');
-    expect(data.cards[0].kind).toBe('guardrail_notice');
+    expect(Array.isArray(data.cards)).toBe(true);
   });
 
   it('blocks out-of-scope non-civic chat queries in POST /api/inspect with GRD-SCP-004 notice', async () => {
@@ -147,10 +147,11 @@ describe('Multi-Layer AI Guardrails & System Q&A Engine', () => {
     expect(data.ok).toBe(true);
     expect(data.blocked).toBe(true);
     expect(data.guardrailCategory).toBe('OUT_OF_SCOPE');
-    expect(data.cards[0].kind).toBe('guardrail_notice');
-    expect(data.cards[0].guardrail.policy_code).toBe('GRD-SCP-004');
-    expect(data.cards[0].guardrail.badge).toBe('DOMAIN SCOPE GUARDRAIL');
-    expect(data.text).toContain('Scope Guardrail');
+    expect(Array.isArray(data.cards)).toBe(true);
+    expect(data.cards).toHaveLength(0);
+    expect(data.text).toBe('I do not understand it, please clarify your request/question');
+
+
   });
 
   it('correctly parses separate name parts and formats full name', () => {

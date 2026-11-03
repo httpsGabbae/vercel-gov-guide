@@ -570,53 +570,8 @@ export function evaluateGuardrails(
           : 'Query falls outside verified Philippine government pre-flight services',
         'Activated domain guardrail to prevent ungrounded hallucination',
       ],
-      replyText: isPureNumberOrSymbols
-        ? 'Out of scope.'
-        : isFil
-          ? `[Scope Guardrail: Labas sa Saklaw ng Citizen's Charter] Ang GovGuidePH ay nakatuon lamang sa Philippine Government Pre-Flight Requirements, Checklists, at AI Document Inspection (partikular sa NBI Clearance, PSA Birth/Marriage Certificate, PhilHealth Registration, at mga kaugnay na Valid Primary IDs). Upang maiwasan ang maling impormasyon, hindi ako sumasagot sa mga tanong na labas sa opisyal na Citizen's Charter.`
-          : `[Scope Guardrail: Outside Verified Citizen's Charter Scope] GovGuidePH is strictly scoped to Philippine Government Pre-Flight Requirements, Checklists, and AI Document Inspection (covering NBI Clearance, PSA Civil Registry Certificates, PhilHealth Registration, and Valid Primary IDs). To prevent hallucination, I only answer questions grounded in official Citizen's Charters.`,
-      guardrailCard: {
-        category: 'OUT_OF_SCOPE',
-        severity: 'warning',
-        policy_code: 'GRD-SCP-004',
-        badge: 'DOMAIN SCOPE GUARDRAIL',
-        title: 'Out-of-Scope Query: Grounded to Official Citizen’s Charters Only',
-        summary:
-          'This assistant only answers questions regarding Philippine government documentary requirements, fees, turnaround times, and ID/document discrepancy checks.',
-        explanation:
-          'This assistant only answers questions regarding Philippine government documentary requirements, fees, turnaround times, and ID/document discrepancy checks.',
-        law_citation: 'GovGuidePH Grounding Policy (Threshold >= 0.65 Similarity)',
-        blocked_input_excerpt: redactSecrets(text.slice(0, 120)),
-        official_guidance:
-          'Ask about NBI Clearance, PSA Birth/Marriage Certificates, PhilHealth PMRF/MDR, First-Time Jobseeker (RA 11261) benefits, or upload your ID/document for inspection.',
-        safe_alternative:
-          'Ask about NBI Clearance, PSA Birth/Marriage Certificates, PhilHealth PMRF/MDR, First-Time Jobseeker (RA 11261) benefits, or upload your ID/document for inspection.',
-        official_hotline: 'NBI: (02) 8523-8231 · PSA: (02) 8461-0500 · PhilHealth: (02) 8441-7442',
-        hotline: 'NBI: (02) 8523-8231 · PSA: (02) 8461-0500 · PhilHealth: (02) 8441-7442',
-      },
-      suggestedNext: [
-        {
-          id: 'nbi_req',
-          label: 'Prepare NBI Clearance Requirements Checklist',
-          hint: 'Includes RA 11261 First-Time Jobseeker & regular renewal rules',
-          action: 'message',
-          text: 'What are the requirements and fees for NBI Clearance?',
-        },
-        {
-          id: 'psa_req',
-          label: 'Prepare PSA Birth Certificate SECPA Checklist',
-          hint: 'Walk-in CRS appointment, fees, and valid IDs',
-          action: 'message',
-          text: 'How do I get a PSA Birth Certificate and what IDs are accepted?',
-        },
-        {
-          id: 'philhealth_req',
-          label: 'Prepare PhilHealth Registration (PMRF / MDR) Checklist',
-          hint: 'Free PIN registration, dependents, and senior citizen subsidy',
-          action: 'message',
-          text: 'What are the requirements for PhilHealth registration and adding dependents?',
-        },
-      ],
+      replyText: 'I do not understand it, please clarify your request/question',
+      suggestedNext: [],
     };
   }
 
